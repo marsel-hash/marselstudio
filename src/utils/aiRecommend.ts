@@ -15,14 +15,16 @@ export interface RecommendArtworkInput {
     dataBase64: string;
     contentType: string;
   } | null;
+  signal?: AbortSignal;
 }
 
 async function urlToCompactBase64(
-  url: string
+  url: string,
+  signal?: AbortSignal
 ): Promise<{ dataBase64: string; contentType: string } | null> {
   if (!url) return null;
   try {
-    const res = await fetch(url, { mode: 'cors' });
+    const res = await fetch(url, { mode: 'cors', signal });
     if (!res.ok) return null;
     const blob = await res.blob();
     if (!blob.type.startsWith('image/')) return null;
@@ -54,7 +56,10 @@ async function urlToCompactBase64(
     } finally {
       URL.revokeObjectURL(objectUrl);
     }
-  } catch {
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw err;
+    }
     return null;
   }
 }
@@ -69,12 +74,13 @@ export async function recommendArtworkDetails(
 
   let imagePayload = input.cachedImage ?? null;
   if (!imagePayload && input.imageUrl) {
-    imagePayload = await urlToCompactBase64(input.imageUrl);
+    imagePayload = await urlToCompactBase64(input.imageUrl, input.signal);
   }
 
   const idToken = await user.getIdToken();
   const response = await fetch('/api/recommend-artwork', {
     method: 'POST',
+    signal: input.signal,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${idToken}`,

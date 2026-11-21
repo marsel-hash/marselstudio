@@ -21,6 +21,28 @@ function gcd(a: number, b: number): number {
   return x || 1;
 }
 
+export function computeSimplifiedAspectRatio(
+  naturalWidth: number,
+  naturalHeight: number
+): { widthRatio: number; heightRatio: number } {
+  const safeW = Math.max(1, Math.round(naturalWidth) || 1);
+  const safeH = Math.max(1, Math.round(naturalHeight) || 1);
+  const divisor = gcd(safeW, safeH);
+  let widthRatio = Math.max(1, Math.round(safeW / divisor));
+  let heightRatio = Math.max(1, Math.round(safeH / divisor));
+
+  if (widthRatio > 10000 || heightRatio > 10000) {
+    const scale = 10000 / Math.max(widthRatio, heightRatio);
+    const scaledW = Math.max(1, Math.round(widthRatio * scale));
+    const scaledH = Math.max(1, Math.round(heightRatio * scale));
+    const d2 = gcd(scaledW, scaledH);
+    widthRatio = Math.max(1, Math.round(scaledW / d2));
+    heightRatio = Math.max(1, Math.round(scaledH / d2));
+  }
+
+  return { widthRatio, heightRatio };
+}
+
 function toHex(r: number, g: number, b: number): string {
   const clamp = (n: number) =>
     Math.max(0, Math.min(255, Math.round(n)))
@@ -63,9 +85,10 @@ export async function processImageFile(
 
     const naturalW = img.naturalWidth || 1;
     const naturalH = img.naturalHeight || 1;
-    const divisor = gcd(naturalW, naturalH);
-    const widthRatio = Math.max(1, Math.round(naturalW / divisor));
-    const heightRatio = Math.max(1, Math.round(naturalH / divisor));
+    const { widthRatio, heightRatio } = computeSimplifiedAspectRatio(
+      naturalW,
+      naturalH
+    );
 
     // Sample dominant top/bottom editorial tones using a tiny offscreen canvas
     let placeholderFrom = '#DDD9D0';

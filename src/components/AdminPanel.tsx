@@ -27,7 +27,11 @@ import {
   type ArtworkInput,
 } from '../services/galleryService';
 import { recommendArtworkDetails } from '../utils/aiRecommend';
-import { processImageFile, uploadProcessedImage } from '../utils/imageUpload';
+import {
+  computeSimplifiedAspectRatio,
+  processImageFile,
+  uploadProcessedImage,
+} from '../utils/imageUpload';
 import { DEFAULT_SITE_CONFIG, type Artwork, type SiteConfig } from '../types/gallery';
 
 interface AdminPanelProps {
@@ -101,6 +105,11 @@ export function AdminPanel({
     contentType: string;
   } | null>(null);
   const [uploadedFilename, setUploadedFilename] = useState('');
+  const [naturalRatio, setNaturalRatio] = useState<{ w: number; h: number } | null>(
+    null
+  );
+  const [followOriginalRatio, setFollowOriginalRatio] = useState(true);
+  const [editorSessionKey, setEditorSessionKey] = useState(0);
 
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [orderedArtworks, setOrderedArtworks] = useState<Artwork[]>(artworks);
@@ -111,6 +120,8 @@ export function AdminPanel({
   const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const latestOrderRef = useRef<Artwork[]>(artworks);
   const dragCleanupRef = useRef<(() => void) | null>(null);
+  const editorSessionIdRef = useRef(0);
+  const aiAbortControllerRef = useRef<AbortController | null>(null);
 
   // Site config form state
   const [configDraft, setConfigDraft] = useState<SiteConfig>(siteConfig);
@@ -131,11 +142,19 @@ export function AdminPanel({
   useEffect(() => {
     return () => {
       dragCleanupRef.current?.();
+      aiAbortControllerRef.current?.abort();
     };
   }, []);
 
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen) {
+      editorSessionIdRef.current += 1;
+      aiAbortControllerRef.current?.abort();
+      aiAbortControllerRef.current = null;
+      setIsGeneratingAi(false);
+      setIsUploadingFile(false);
+      return;
+    }
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e: KeyboardEvent) => {
@@ -202,26 +221,57 @@ export function AdminPanel({
     }
   };
 
+  const resetEditorSession = () => {
+    editorSessionIdRef.current += 1;
+    aiAbortControllerRef.current?.abort();
+    aiAbortControllerRef.current = null;
+    setIsGeneratingAi(false);
+    setIsUploadingFile(false);
+    setEditorSessionKey((k) => k + 1);
+  };
+
+  const closeArtworkEditor = () => {
+    resetEditorSession();
+    setShowEditor(false);
+    setEditingId(null);
+    setCachedUploadImage(null);
+    setUploadedFilename('');
+    setNaturalRatio(null);
+  };
+
   const openNewArtworkForm = () => {
     clearFeedback();
+    resetEditorSession();
     const maxOrder = artworks.reduce(
       (max, item) => Math.max(max, item.sortOrder),
       0
     );
+    setActiveTab('artworks');
     setEditingId(null);
     setCachedUploadImage(null);
     setUploadedFilename('');
+    setNaturalRatio(null);
+    setFollowOriginalRatio(true);
     setDraft(
       createEmptyDraft(siteConfig.categories[0] || 'Architecture', maxOrder + 10)
     );
     setShowEditor(true);
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const openEditArtworkForm = (artwork: Artwork) => {
     clearFeedback();
+    resetEditorSession();
+    const matchesPreset = RATIO_PRESETS.some(
+      (preset) =>
+        preset.w === artwork.widthRatio && preset.h === artwork.heightRatio
+    );
+    setActiveTab('artworks');
     setEditingId(artwork.id);
     setCachedUploadImage(null);
     setUploadedFilename('');
+    setNaturalRatio(null);
+    setFollowOriginalRatio(!matchesPreset);
     setDraft({
       title: artwork.title,
       year: artwork.year,
@@ -237,21 +287,46 @@ export function AdminPanel({
       published: artwork.published,
     });
     setShowEditor(true);
+    scrollContainerRef.current?.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const handlePreviewImageLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    if (!img.naturalWidth || !img.naturalHeight) return;
+    const { widthRatio, heightRatio } = computeSimplifiedAspectRatio(
+      img.naturalWidth,
+      img.naturalHeight
+    );
+    setNaturalRatio({ w: widthRatio, h: heightRatio });
+    if (followOriginalRatio) {
+      setDraft((prev) =>
+        prev.widthRatio === widthRatio && prev.heightRatio === heightRatio
+          ? prev
+          : { ...prev, widthRatio, heightRatio }
+      );
+    }
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+    const sessionId = editorSessionIdRef.current;
     clearFeedback();
     setIsUploadingFile(true);
     try {
       const processed = await processImageFile(file);
       const uploadedUrl = await uploadProcessedImage(processed);
+      if (editorSessionIdRef.current !== sessionId) return;
       setCachedUploadImage({
         dataBase64: processed.dataBase64,
         contentType: processed.contentType,
       });
       setUploadedFilename(file.name);
+      setNaturalRatio({
+        w: processed.widthRatio,
+        h: processed.heightRatio,
+      });
+      setFollowOriginalRatio(true);
       setDraft((prev) => ({
         ...prev,
         src: uploadedUrl,
@@ -270,11 +345,14 @@ export function AdminPanel({
         'Photo optimized and uploaded. Use "Suggest Details with AI" to auto-fill title, category, medium, and caption.'
       );
     } catch (error) {
+      if (editorSessionIdRef.current !== sessionId) return;
       setErrorMessage(
         error instanceof Error ? error.message : 'Failed to upload image file.'
       );
     } finally {
-      setIsUploadingFile(false);
+      if (editorSessionIdRef.current === sessionId) {
+        setIsUploadingFile(false);
+      }
       e.target.value = '';
     }
   };
@@ -285,6 +363,11 @@ export function AdminPanel({
       return;
     }
 
+    const sessionId = editorSessionIdRef.current;
+    aiAbortControllerRef.current?.abort();
+    const controller = new AbortController();
+    aiAbortControllerRef.current = controller;
+
     clearFeedback();
     setIsGeneratingAi(true);
     try {
@@ -293,7 +376,10 @@ export function AdminPanel({
         categories: siteConfig.categories,
         filename: uploadedFilename,
         cachedImage: cachedUploadImage,
+        signal: controller.signal,
       });
+
+      if (editorSessionIdRef.current !== sessionId) return;
 
       setDraft((prev) => ({
         ...prev,
@@ -306,34 +392,44 @@ export function AdminPanel({
         'AI curatorial suggestions applied. Review or refine any field before saving.'
       );
     } catch (error) {
+      if (
+        editorSessionIdRef.current !== sessionId ||
+        (error instanceof DOMException && error.name === 'AbortError')
+      ) {
+        return;
+      }
       setErrorMessage(
         error instanceof Error
           ? error.message
           : 'Failed to generate AI curatorial suggestions.'
       );
     } finally {
-      setIsGeneratingAi(false);
+      if (editorSessionIdRef.current === sessionId) {
+        aiAbortControllerRef.current = null;
+        setIsGeneratingAi(false);
+      }
     }
   };
 
   const handleSaveArtwork = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+    const sessionId = editorSessionIdRef.current;
     clearFeedback();
     setIsBusy(true);
     try {
       if (editingId) {
         await updateArtwork(editingId, draft);
+        if (editorSessionIdRef.current !== sessionId) return;
         setStatusMessage('Artwork changes saved.');
       } else {
         await createArtwork(draft, user.uid);
+        if (editorSessionIdRef.current !== sessionId) return;
         setStatusMessage('New artwork published to gallery.');
       }
-      setShowEditor(false);
-      setEditingId(null);
-      setCachedUploadImage(null);
-      setUploadedFilename('');
+      closeArtworkEditor();
     } catch (error) {
+      if (editorSessionIdRef.current !== sessionId) return;
       setErrorMessage(
         error instanceof Error ? error.message : 'Failed to save artwork.'
       );
@@ -788,6 +884,7 @@ export function AdminPanel({
                 <div className="space-y-6">
                   {showEditor && (
                     <form
+                      key={editorSessionKey}
                       onSubmit={handleSaveArtwork}
                       className="p-5 sm:p-7 border border-black/[0.1] rounded-lg bg-white space-y-5"
                     >
@@ -797,12 +894,7 @@ export function AdminPanel({
                         </h3>
                         <button
                           type="button"
-                          onClick={() => {
-                            setShowEditor(false);
-                            setEditingId(null);
-                            setCachedUploadImage(null);
-                            setUploadedFilename('');
-                          }}
+                          onClick={closeArtworkEditor}
                           className="min-h-[40px] px-2 text-xs text-[#6B6A65] hover:text-[#141413]"
                         >
                           Cancel
@@ -811,29 +903,36 @@ export function AdminPanel({
 
                       {/* Upload & URL Section */}
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-5 items-start">
-                        <div
-                          className="w-full rounded-md overflow-hidden border border-black/[0.08] flex items-center justify-center bg-[#EFEDE8]"
-                          style={{
-                            aspectRatio: `${draft.widthRatio} / ${draft.heightRatio}`,
-                            maxHeight: '260px',
-                            backgroundImage: `linear-gradient(155deg, ${draft.placeholderFrom} 0%, ${draft.placeholderTo} 100%)`,
-                          }}
-                        >
-                          {draft.src ? (
-                            <img
-                              src={draft.src}
-                              alt="Artwork preview"
-                              className="w-full h-full object-cover"
-                            />
-                          ) : (
-                            <div className="p-6 text-center text-[#6B6A65]">
-                              <ImagePlus
-                                className="w-6 h-6 mx-auto mb-2 opacity-60"
-                                aria-hidden="true"
+                        <div className="flex justify-center sm:justify-start">
+                          <div
+                            className="w-full rounded-md overflow-hidden border border-black/[0.08] flex items-center justify-center bg-[#EFEDE8]"
+                            style={{
+                              aspectRatio: `${draft.widthRatio} / ${draft.heightRatio}`,
+                              maxHeight: '280px',
+                              maxWidth:
+                                draft.widthRatio <= draft.heightRatio
+                                  ? `calc(280px * ${draft.widthRatio} / ${draft.heightRatio})`
+                                  : '100%',
+                              backgroundImage: `linear-gradient(155deg, ${draft.placeholderFrom} 0%, ${draft.placeholderTo} 100%)`,
+                            }}
+                          >
+                            {draft.src ? (
+                              <img
+                                src={draft.src}
+                                alt="Artwork preview"
+                                onLoad={handlePreviewImageLoad}
+                                className="w-full h-full object-cover"
                               />
-                              <span className="text-xs">Photo preview</span>
-                            </div>
-                          )}
+                            ) : (
+                              <div className="p-6 text-center text-[#6B6A65]">
+                                <ImagePlus
+                                  className="w-6 h-6 mx-auto mb-2 opacity-60"
+                                  aria-hidden="true"
+                                />
+                                <span className="text-xs">Photo preview</span>
+                              </div>
+                            )}
+                          </div>
                         </div>
 
                         <div className="sm:col-span-2 space-y-4">
@@ -876,6 +975,7 @@ export function AdminPanel({
                               value={draft.src}
                               onChange={(e) => {
                                 setCachedUploadImage(null);
+                                setNaturalRatio(null);
                                 setDraft((p) => ({ ...p, src: e.target.value }));
                               }}
                               placeholder="https://... or /uploads/..."
@@ -888,18 +988,44 @@ export function AdminPanel({
                               Photo Aspect Ratio ({draft.widthRatio}:{draft.heightRatio})
                             </span>
                             <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setFollowOriginalRatio(true);
+                                  if (naturalRatio) {
+                                    setDraft((p) => ({
+                                      ...p,
+                                      widthRatio: naturalRatio.w,
+                                      heightRatio: naturalRatio.h,
+                                    }));
+                                  }
+                                }}
+                                className={`px-2.5 py-1.5 text-[11px] border rounded-md transition-colors ${
+                                  followOriginalRatio
+                                    ? 'bg-[#141413] text-[#FAF9F6] border-[#141413]'
+                                    : 'bg-white text-[#4A4945] border-black/[0.12] hover:border-black/30'
+                                }`}
+                              >
+                                {naturalRatio &&
+                                naturalRatio.w < 100 &&
+                                naturalRatio.h < 100
+                                  ? `Original (${naturalRatio.w}:${naturalRatio.h})`
+                                  : 'Original Ratio'}
+                              </button>
                               {RATIO_PRESETS.map((preset) => (
                                 <button
                                   key={preset.label}
                                   type="button"
-                                  onClick={() =>
+                                  onClick={() => {
+                                    setFollowOriginalRatio(false);
                                     setDraft((p) => ({
                                       ...p,
                                       widthRatio: preset.w,
                                       heightRatio: preset.h,
-                                    }))
-                                  }
+                                    }));
+                                  }}
                                   className={`px-2.5 py-1.5 text-[11px] border rounded-md transition-colors ${
+                                    !followOriginalRatio &&
                                     draft.widthRatio === preset.w &&
                                     draft.heightRatio === preset.h
                                       ? 'bg-[#141413] text-[#FAF9F6] border-[#141413]'
