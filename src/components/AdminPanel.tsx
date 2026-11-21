@@ -126,11 +126,22 @@ export function AdminPanel({
     try {
       await signInWithPopup(auth, googleProvider);
     } catch (error) {
-      setAuthError(
-        error instanceof Error
-          ? error.message
-          : 'Gagal masuk dengan akun Google.'
-      );
+      const msg = error instanceof Error ? error.message : '';
+      if (msg.includes('auth/unauthorized-domain')) {
+        const host =
+          typeof window !== 'undefined' ? window.location.hostname : 'domain ini';
+        setAuthError(
+          `Domain "${host}" belum didaftarkan di Firebase. Buka Firebase Console (proyek bold-veld-z6rpq) → Authentication → Settings → Authorized domains, lalu tambahkan "${host}".`
+        );
+      } else if (msg.includes('auth/popup-blocked')) {
+        setAuthError(
+          'Pop-up login diblokir oleh peramban. Izinkan pop-up untuk situs ini lalu coba lagi.'
+        );
+      } else if (msg.includes('auth/popup-closed-by-user')) {
+        setAuthError('Jendela login ditutup sebelum proses masuk selesai.');
+      } else {
+        setAuthError(msg || 'Gagal masuk dengan akun Google.');
+      }
     }
   };
 

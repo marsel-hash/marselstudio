@@ -1,8 +1,24 @@
 import crypto from 'node:crypto';
+import fsSync from 'node:fs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { put } from '@vercel/blob';
-import firebaseConfig from '../firebase-applet-config.json' with { type: 'json' };
+
+interface FirebaseAppletConfig {
+  projectId: string;
+  apiKey: string;
+  firestoreDatabaseId?: string;
+}
+
+let cachedFirebaseConfig: FirebaseAppletConfig | null = null;
+
+function getFirebaseConfig(): FirebaseAppletConfig {
+  if (cachedFirebaseConfig) return cachedFirebaseConfig;
+  const configPath = path.resolve(process.cwd(), 'firebase-applet-config.json');
+  const raw = fsSync.readFileSync(configPath, 'utf-8');
+  cachedFirebaseConfig = JSON.parse(raw) as FirebaseAppletConfig;
+  return cachedFirebaseConfig;
+}
 
 const ALLOWED_MIME_TYPES: Record<string, string> = {
   'image/jpeg': 'jpg',
@@ -44,6 +60,7 @@ async function verifyAdminBearerToken(
     return null;
   }
 
+  const firebaseConfig = getFirebaseConfig();
   const apiKey = process.env.FIREBASE_API_KEY || firebaseConfig.apiKey;
   const lookupUrl = `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${encodeURIComponent(apiKey)}`;
 
