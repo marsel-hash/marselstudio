@@ -1,0 +1,6 @@
+{
+  "name": "Niskala — Galeri Fotografi Seni",
+  "description": "Galeri foto karya seni minimalis dan editorial berfokus pada pengalaman seluler dengan tata letak masonry yang tenang dan penampil layar penuh.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

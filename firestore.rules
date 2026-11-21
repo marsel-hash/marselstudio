@@ -1,0 +1,235 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net (Default Deny)
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // -------------------------------------------------------------------------
+    // Reusable Hardened Helpers
+    // -------------------------------------------------------------------------
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isVerifiedUser() {
+      return isSignedIn() && request.auth.token.email_verified == true;
+    }
+
+    function isBootstrappedAdmin() {
+      return isVerifiedUser() && request.auth.token.email == 'musanursyuhada44@gmail.com';
+    }
+
+    function isAdmin() {
+      return isBootstrappedAdmin() || (
+        isVerifiedUser() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid))
+      );
+    }
+
+    // -------------------------------------------------------------------------
+    // Entity Validation Blueprints
+    // -------------------------------------------------------------------------
+    function isValidSiteConfig(data) {
+      return data.keys().hasAll([
+          'brandName',
+          'heroTitle',
+          'heroSubtitle',
+          'aboutKicker',
+          'aboutTitle',
+          'aboutParagraph1',
+          'footerBrand',
+          'footerCopyright',
+          'categories',
+          'updatedAt',
+          'updatedBy'
+        ]) &&
+        data.keys().hasOnly([
+          'brandName',
+          'heroTitle',
+          'heroSubtitle',
+          'aboutKicker',
+          'aboutTitle',
+          'aboutParagraph1',
+          'aboutParagraph2',
+          'aboutPeriod',
+          'aboutLocation',
+          'footerBrand',
+          'footerCopyright',
+          'categories',
+          'updatedAt',
+          'updatedBy'
+        ]) &&
+        data.brandName is string && data.brandName.size() >= 1 && data.brandName.size() <= 60 &&
+        data.heroTitle is string && data.heroTitle.size() >= 1 && data.heroTitle.size() <= 140 &&
+        data.heroSubtitle is string && data.heroSubtitle.size() >= 1 && data.heroSubtitle.size() <= 320 &&
+        data.aboutKicker is string && data.aboutKicker.size() >= 1 && data.aboutKicker.size() <= 60 &&
+        data.aboutTitle is string && data.aboutTitle.size() >= 1 && data.aboutTitle.size() <= 120 &&
+        data.aboutParagraph1 is string && data.aboutParagraph1.size() >= 1 && data.aboutParagraph1.size() <= 800 &&
+        (!('aboutParagraph2' in data) || (data.aboutParagraph2 is string && data.aboutParagraph2.size() <= 800)) &&
+        (!('aboutPeriod' in data) || (data.aboutPeriod is string && data.aboutPeriod.size() <= 80)) &&
+        (!('aboutLocation' in data) || (data.aboutLocation is string && data.aboutLocation.size() <= 80)) &&
+        data.footerBrand is string && data.footerBrand.size() >= 1 && data.footerBrand.size() <= 100 &&
+        data.footerCopyright is string && data.footerCopyright.size() >= 1 && data.footerCopyright.size() <= 140 &&
+        data.categories is list && data.categories.size() >= 1 && data.categories.size() <= 8 &&
+        data.categories[0] is string && data.categories[0].size() >= 1 && data.categories[0].size() <= 32 &&
+        data.updatedAt is timestamp && data.updatedAt == request.time &&
+        data.updatedBy is string && data.updatedBy == request.auth.uid && data.updatedBy.size() <= 128;
+    }
+
+    function isValidArtwork(data) {
+      return data.keys().hasAll([
+          'title',
+          'year',
+          'medium',
+          'category',
+          'src',
+          'widthRatio',
+          'heightRatio',
+          'placeholderFrom',
+          'placeholderTo',
+          'sortOrder',
+          'published',
+          'authorId',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.keys().hasOnly([
+          'title',
+          'year',
+          'medium',
+          'category',
+          'caption',
+          'src',
+          'widthRatio',
+          'heightRatio',
+          'placeholderFrom',
+          'placeholderTo',
+          'sortOrder',
+          'published',
+          'authorId',
+          'createdAt',
+          'updatedAt'
+        ]) &&
+        data.title is string && data.title.size() >= 1 && data.title.size() <= 120 &&
+        data.year is string && data.year.size() >= 4 && data.year.size() <= 16 && data.year.matches('^[0-9]{4}([-–][0-9]{4})?$') &&
+        data.medium is string && data.medium.size() >= 1 && data.medium.size() <= 160 &&
+        data.category is string && data.category.size() >= 1 && data.category.size() <= 32 &&
+        (!('caption' in data) || (data.caption is string && data.caption.size() <= 360)) &&
+        data.src is string && data.src.size() >= 1 && data.src.size() <= 1200 && data.src.matches('^(https?://|/).+') &&
+        data.widthRatio is number && data.widthRatio > 0 && data.widthRatio <= 10000 &&
+        data.heightRatio is number && data.heightRatio > 0 && data.heightRatio <= 10000 &&
+        data.placeholderFrom is string && data.placeholderFrom.matches('^#[0-9A-Fa-f]{6}$') &&
+        data.placeholderTo is string && data.placeholderTo.matches('^#[0-9A-Fa-f]{6}$') &&
+        data.sortOrder is number && data.sortOrder >= 0 && data.sortOrder <= 100000 &&
+        data.published is bool &&
+        data.authorId is string && data.authorId.size() >= 1 && data.authorId.size() <= 128 &&
+        data.createdAt is timestamp &&
+        data.updatedAt is timestamp && data.updatedAt == request.time;
+    }
+
+    function isValidAdminUser(data, adminUid) {
+      return data.keys().hasAll(['uid', 'role', 'addedAt']) &&
+        data.keys().hasOnly(['uid', 'role', 'addedAt']) &&
+        data.uid is string && data.uid == adminUid && data.uid.size() <= 128 &&
+        data.role is string && data.role == 'admin' &&
+        data.addedAt is timestamp && data.addedAt == request.time;
+    }
+
+    // -------------------------------------------------------------------------
+    // Collection Rules
+    // -------------------------------------------------------------------------
+    match /siteConfig/{configId} {
+      allow get: if isValidId(configId) && configId == 'main';
+      allow list: if false;
+      allow create: if isValidId(configId) &&
+        configId == 'main' &&
+        isValidSiteConfig(incoming()) &&
+        isAdmin();
+      allow update: if isValidId(configId) &&
+        configId == 'main' &&
+        isValidSiteConfig(incoming()) &&
+        isAdmin() &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'brandName',
+          'heroTitle',
+          'heroSubtitle',
+          'aboutKicker',
+          'aboutTitle',
+          'aboutParagraph1',
+          'aboutParagraph2',
+          'aboutPeriod',
+          'aboutLocation',
+          'footerBrand',
+          'footerCopyright',
+          'categories',
+          'updatedAt',
+          'updatedBy'
+        ]);
+      allow delete: if false;
+    }
+
+    match /artworks/{artworkId} {
+      allow get: if isValidId(artworkId) && (existing().published == true || isAdmin());
+      allow list: if resource.data.published == true || isBootstrappedAdmin();
+      allow create: if isValidId(artworkId) &&
+        isValidArtwork(incoming()) &&
+        incoming().authorId == request.auth.uid &&
+        incoming().createdAt == request.time &&
+        isAdmin();
+      allow update: if isValidId(artworkId) &&
+        isValidArtwork(incoming()) &&
+        isAdmin() &&
+        incoming().authorId == existing().authorId &&
+        incoming().createdAt == existing().createdAt &&
+        incoming().diff(existing()).affectedKeys().hasOnly([
+          'title',
+          'year',
+          'medium',
+          'category',
+          'caption',
+          'src',
+          'widthRatio',
+          'heightRatio',
+          'placeholderFrom',
+          'placeholderTo',
+          'sortOrder',
+          'published',
+          'updatedAt'
+        ]);
+      allow delete: if isValidId(artworkId) && isAdmin();
+    }
+
+    match /admins/{adminUid} {
+      allow get: if isValidId(adminUid) && (
+        (isVerifiedUser() && request.auth.uid == adminUid) ||
+        isBootstrappedAdmin()
+      );
+      allow list: if isBootstrappedAdmin();
+      allow create: if isValidId(adminUid) &&
+        isValidAdminUser(incoming(), adminUid) &&
+        isBootstrappedAdmin();
+      allow update: if isValidId(adminUid) &&
+        isValidAdminUser(incoming(), adminUid) &&
+        isBootstrappedAdmin() &&
+        incoming().uid == existing().uid &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['role', 'addedAt']);
+      allow delete: if isValidId(adminUid) && isBootstrappedAdmin();
+    }
+  }
+}

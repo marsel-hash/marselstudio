@@ -1,0 +1,240 @@
+{
+  "entities": {
+    "SiteConfig": {
+      "title": "SiteConfig",
+      "description": "Global editorial copy, branding, about curatorial text, footer, and category definitions for the gallery.",
+      "type": "object",
+      "properties": {
+        "brandName": {
+          "type": "string",
+          "description": "Gallery wordmark displayed in the header.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "heroTitle": {
+          "type": "string",
+          "description": "Main editorial headline above the gallery grid.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "heroSubtitle": {
+          "type": "string",
+          "description": "Brief introductory paragraph below the hero headline.",
+          "minLength": 1,
+          "maxLength": 320
+        },
+        "aboutKicker": {
+          "type": "string",
+          "description": "Small label above the About modal heading.",
+          "minLength": 1,
+          "maxLength": 60
+        },
+        "aboutTitle": {
+          "type": "string",
+          "description": "Heading inside the About modal.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "aboutParagraph1": {
+          "type": "string",
+          "description": "First curatorial paragraph in the About modal.",
+          "minLength": 1,
+          "maxLength": 800
+        },
+        "aboutParagraph2": {
+          "type": "string",
+          "description": "Second curatorial paragraph in the About modal.",
+          "maxLength": 800
+        },
+        "aboutPeriod": {
+          "type": "string",
+          "description": "Exhibition period metadata in the About modal footer.",
+          "maxLength": 80
+        },
+        "aboutLocation": {
+          "type": "string",
+          "description": "City or studio location in the About modal footer.",
+          "maxLength": 80
+        },
+        "footerBrand": {
+          "type": "string",
+          "description": "Gallery title shown in the page footer.",
+          "minLength": 1,
+          "maxLength": 100
+        },
+        "footerCopyright": {
+          "type": "string",
+          "description": "Copyright notice shown in the page footer.",
+          "minLength": 1,
+          "maxLength": 140
+        },
+        "categories": {
+          "type": "array",
+          "description": "Ordered list of gallery filter categories excluding 'Semua'."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp of last update."
+        },
+        "updatedBy": {
+          "type": "string",
+          "description": "UID of the admin who last updated the site config.",
+          "maxLength": 128
+        }
+      },
+      "required": [
+        "brandName",
+        "heroTitle",
+        "heroSubtitle",
+        "aboutKicker",
+        "aboutTitle",
+        "aboutParagraph1",
+        "footerBrand",
+        "footerCopyright",
+        "categories",
+        "updatedAt",
+        "updatedBy"
+      ]
+    },
+    "Artwork": {
+      "title": "Artwork",
+      "description": "A fine art photograph entry in the gallery.",
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string",
+          "description": "Artwork title.",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "year": {
+          "type": "string",
+          "description": "Creation year or range.",
+          "minLength": 4,
+          "maxLength": 16,
+          "pattern": "^[0-9]{4}([-–][0-9]{4})?$"
+        },
+        "medium": {
+          "type": "string",
+          "description": "Print medium or photographic process.",
+          "minLength": 1,
+          "maxLength": 160
+        },
+        "category": {
+          "type": "string",
+          "description": "Category label matching site categories.",
+          "minLength": 1,
+          "maxLength": 32
+        },
+        "caption": {
+          "type": "string",
+          "description": "Optional brief curatorial note.",
+          "maxLength": 360
+        },
+        "src": {
+          "type": "string",
+          "description": "Safe image URL (https, http, or root-relative path).",
+          "minLength": 1,
+          "maxLength": 1200,
+          "pattern": "^(https?://|/).+"
+        },
+        "widthRatio": {
+          "type": "number",
+          "description": "Natural aspect width ratio."
+        },
+        "heightRatio": {
+          "type": "number",
+          "description": "Natural aspect height ratio."
+        },
+        "placeholderFrom": {
+          "type": "string",
+          "description": "Primary hex color for blur-up tonal placeholder.",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "placeholderTo": {
+          "type": "string",
+          "description": "Secondary hex color for blur-up tonal placeholder.",
+          "pattern": "^#[0-9A-Fa-f]{6}$"
+        },
+        "sortOrder": {
+          "type": "number",
+          "description": "Display sort priority (lower appears earlier)."
+        },
+        "published": {
+          "type": "boolean",
+          "description": "Whether the artwork is visible to public visitors."
+        },
+        "authorId": {
+          "type": "string",
+          "description": "UID of the admin who created the artwork.",
+          "maxLength": 128
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when created."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when last updated."
+        }
+      },
+      "required": [
+        "title",
+        "year",
+        "medium",
+        "category",
+        "src",
+        "widthRatio",
+        "heightRatio",
+        "placeholderFrom",
+        "placeholderTo",
+        "sortOrder",
+        "published",
+        "authorId",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "AdminUser": {
+      "title": "AdminUser",
+      "description": "Authorized gallery administrator record keyed by Firebase Auth UID.",
+      "type": "object",
+      "properties": {
+        "uid": {
+          "type": "string",
+          "description": "Firebase Auth UID.",
+          "minLength": 1,
+          "maxLength": 128
+        },
+        "role": {
+          "type": "string",
+          "description": "Role name.",
+          "enum": ["admin"]
+        },
+        "addedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Server timestamp when granted access."
+        }
+      },
+      "required": ["uid", "role", "addedAt"]
+    }
+  },
+  "firestore": {
+    "/siteConfig/{configId}": {
+      "schema": { "$ref": "#/entities/SiteConfig" },
+      "description": "Stores global gallery settings and editable website copy (document 'main')."
+    },
+    "/artworks/{artworkId}": {
+      "schema": { "$ref": "#/entities/Artwork" },
+      "description": "Stores fine art photography items displayed in the gallery."
+    },
+    "/admins/{adminUid}": {
+      "schema": { "$ref": "#/entities/AdminUser" },
+      "description": "Stores authorized admin UIDs for role checks."
+    }
+  }
+}
