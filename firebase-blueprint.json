@@ -72,6 +72,21 @@
           "type": "array",
           "description": "Ordered list of gallery filter categories excluding 'Semua'."
         },
+        "metaDescription": {
+          "type": "string",
+          "description": "SEO meta description and Open Graph description.",
+          "maxLength": 320
+        },
+        "ogTitle": {
+          "type": "string",
+          "description": "Open Graph and browser tab title.",
+          "maxLength": 140
+        },
+        "faviconUrl": {
+          "type": "string",
+          "description": "Safe URL for custom site favicon.",
+          "maxLength": 1200
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",

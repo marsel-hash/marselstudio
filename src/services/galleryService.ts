@@ -90,6 +90,16 @@ export function subscribeSiteConfig(
                   (c): c is string => typeof c === 'string' && c.length > 0
                 )
               : DEFAULT_SITE_CONFIG.categories,
+          metaDescription:
+            typeof data.metaDescription === 'string' && data.metaDescription
+              ? data.metaDescription
+              : DEFAULT_SITE_CONFIG.metaDescription,
+          ogTitle:
+            typeof data.ogTitle === 'string' && data.ogTitle
+              ? data.ogTitle
+              : DEFAULT_SITE_CONFIG.ogTitle,
+          faviconUrl:
+            typeof data.faviconUrl === 'string' ? data.faviconUrl : '',
         },
         true
       );
@@ -176,6 +186,11 @@ export async function saveSiteConfig(
     throw new Error('Semua kolom utama situs wajib diisi.');
   }
 
+  const faviconUrl = clampString(config.faviconUrl || '', 1200);
+  if (faviconUrl && !isSafeImageUrl(faviconUrl)) {
+    throw new Error('URL favicon harus diawali https://, http://, atau /.');
+  }
+
   const payload = {
     brandName,
     heroTitle,
@@ -189,6 +204,9 @@ export async function saveSiteConfig(
     footerBrand,
     footerCopyright,
     categories: cleanCategories,
+    metaDescription: clampString(config.metaDescription || '', 320),
+    ogTitle: clampString(config.ogTitle || '', 140),
+    faviconUrl,
     updatedAt: serverTimestamp(),
     updatedBy: uid,
   };

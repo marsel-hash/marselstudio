@@ -84,8 +84,8 @@ export async function processImageFile(
       placeholderTo = softenColor(data[last], data[last + 1], data[last + 2]);
     }
 
-    // Resize oversized photos cleanly to max 2200px longest side for fast mobile loading
-    const maxEdge = 2200;
+    // Resize and optimize so base64 JSON stays well under Vercel's 4.5MB limit
+    const maxEdge = 1800;
     const scale = Math.min(1, maxEdge / Math.max(naturalW, naturalH));
     const targetW = Math.max(1, Math.round(naturalW * scale));
     const targetH = Math.max(1, Math.round(naturalH * scale));
@@ -100,12 +100,25 @@ export async function processImageFile(
     ctx.drawImage(img, 0, 0, targetW, targetH);
 
     const preferWebp = file.type === 'image/webp' || file.type === 'image/png';
-    const contentType = preferWebp ? 'image/webp' : 'image/jpeg';
-    const dataUrl = canvas.toDataURL(contentType, 0.88);
-    const dataBase64 = dataUrl.split(',')[1] || '';
+    let contentType = preferWebp ? 'image/webp' : 'image/jpeg';
+    let quality = 0.85;
+    let dataUrl = canvas.toDataURL(contentType, quality);
+    let dataBase64 = dataUrl.split(',')[1] || '';
+
+    // Step down quality if still above ~2.6MB base64
+    while (dataBase64.length > 2_600_000 && quality > 0.55) {
+      quality -= 0.1;
+      contentType = 'image/jpeg';
+      dataUrl = canvas.toDataURL(contentType, quality);
+      dataBase64 = dataUrl.split(',')[1] || '';
+    }
 
     const ext = contentType === 'image/webp' ? 'webp' : 'jpg';
-    const baseName = file.name.replace(/\.[^/.]+$/, '').replace(/[^a-zA-Z0-9_-]/g, '-').slice(0, 40) || 'karya';
+    const baseName =
+      file.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '-')
+        .slice(0, 40) || 'karya';
 
     return {
       dataBase64,
@@ -143,14 +156,18 @@ export async function uploadProcessedImage(
     }),
   });
 
-  const payload = (await response.json().catch(() => ({}))) as {
-    url?: string;
-    error?: string;
-  };
+  const rawText = await response.text();
+  let payload: { url?: string; error?: string } = {};
+  try {
+    payload = JSON.parse(rawText) as { url?: string; error?: string };
+  } catch {
+    // Non-JSON response (e.g., platform 413 or 500)
+  }
 
   if (!response.ok || !payload.url) {
     throw new Error(
-      payload.error || 'Gagal mengunggah gambar ke server penyimpanan.'
+      payload.error ||
+        `Gagal mengunggah gambar (HTTP ${response.status}). Pastikan BLOB_READ_WRITE_TOKEN sudah terpasang di Vercel.`
     );
   }
 

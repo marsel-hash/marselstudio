@@ -8,6 +8,7 @@ import {
 } from './services/galleryService';
 import {
   DEFAULT_SITE_CONFIG,
+  isSafeImageUrl,
   type Artwork,
   type CategoryKey,
   type SiteConfig,
@@ -37,6 +38,21 @@ export default function App() {
       window.location.pathname === '/admin' || window.location.hash === '#admin'
     );
   });
+
+  useEffect(() => {
+    const syncAdminFromUrl = () => {
+      const shouldOpen =
+        window.location.pathname === '/admin' ||
+        window.location.hash === '#admin';
+      setIsAdminOpen(shouldOpen);
+    };
+    window.addEventListener('popstate', syncAdminFromUrl);
+    window.addEventListener('hashchange', syncAdminFromUrl);
+    return () => {
+      window.removeEventListener('popstate', syncAdminFromUrl);
+      window.removeEventListener('hashchange', syncAdminFromUrl);
+    };
+  }, []);
 
   const isBootstrappedAdmin =
     Boolean(user?.emailVerified) &&
@@ -70,10 +86,45 @@ export default function App() {
     return () => unsubArtworks();
   }, [authReady, isBootstrappedAdmin]);
 
-  // Keep page <title> synced with edited brand name
+  // Sync page <title>, SEO meta tags, Open Graph tags, and favicon with siteConfig
   useEffect(() => {
-    document.title = `${siteConfig.brandName} — Galeri Fotografi Seni`;
-  }, [siteConfig.brandName]);
+    const resolvedTitle =
+      siteConfig.ogTitle.trim() ||
+      `${siteConfig.brandName} — Galeri Fotografi Seni`;
+    document.title = resolvedTitle;
+
+    const setMeta = (selector: string, attrName: 'name' | 'property', attrVal: string, content: string) => {
+      let el = document.head.querySelector<HTMLMetaElement>(selector);
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attrName, attrVal);
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+
+    setMeta('meta[name="description"]', 'name', 'description', siteConfig.metaDescription);
+    setMeta('meta[property="og:title"]', 'property', 'og:title', resolvedTitle);
+    setMeta('meta[property="og:description"]', 'property', 'og:description', siteConfig.metaDescription);
+
+    const existingIcon = document.head.querySelector<HTMLLinkElement>('link[rel="icon"]');
+    const cleanFavicon = siteConfig.faviconUrl.trim();
+    const resolvedIconHref =
+      cleanFavicon && isSafeImageUrl(cleanFavicon) ? cleanFavicon : '/favicon.svg';
+    if (existingIcon) {
+      existingIcon.href = resolvedIconHref;
+    } else {
+      const link = document.createElement('link');
+      link.rel = 'icon';
+      link.href = resolvedIconHref;
+      document.head.appendChild(link);
+    }
+  }, [
+    siteConfig.brandName,
+    siteConfig.ogTitle,
+    siteConfig.metaDescription,
+    siteConfig.faviconUrl,
+  ]);
 
   // Show curated defaults until admin initializes Firestore
   const allManagedArtworks = useMemo(() => {
@@ -203,17 +254,7 @@ export default function App() {
           <span className="font-serif-editorial text-sm text-[#141413]">
             {siteConfig.footerBrand}
           </span>
-          <div className="flex items-center gap-4">
-            <span>{siteConfig.footerCopyright}</span>
-            <span aria-hidden="true">·</span>
-            <button
-              type="button"
-              onClick={() => setIsAdminOpen(true)}
-              className="min-h-[36px] text-[#6B6A65] hover:text-[#141413] underline-offset-4 hover:underline transition-colors whitespace-nowrap shrink-0"
-            >
-              {isBootstrappedAdmin ? 'Admin Studio' : 'Admin'}
-            </button>
-          </div>
+          <span>{siteConfig.footerCopyright}</span>
         </div>
       </footer>
 
@@ -239,7 +280,15 @@ export default function App() {
         configExistsInDb={configExistsInDb}
         artworks={allManagedArtworks}
         artworksExistInDb={artworksExistInDb}
-        onClose={() => setIsAdminOpen(false)}
+        onClose={() => {
+          setIsAdminOpen(false);
+          if (
+            window.location.pathname === '/admin' ||
+            window.location.hash === '#admin'
+          ) {
+            window.history.replaceState(null, '', '/');
+          }
+        }}
       />
     </div>
   );

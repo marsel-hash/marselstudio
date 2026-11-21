@@ -95,6 +95,7 @@ export function AdminPanel({
   // Site config form state
   const [configDraft, setConfigDraft] = useState<SiteConfig>(siteConfig);
   const [newCategoryInput, setNewCategoryInput] = useState('');
+  const [isUploadingFavicon, setIsUploadingFavicon] = useState(false);
 
   useEffect(() => {
     setConfigDraft(siteConfig);
@@ -346,6 +347,33 @@ export function AdminPanel({
       ...prev,
       categories: prev.categories.filter((c) => c !== cat),
     }));
+  };
+
+  const handleFaviconFileChange = async (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    clearFeedback();
+    setIsUploadingFavicon(true);
+    try {
+      const processed = await processImageFile(file);
+      const uploadedUrl = await uploadProcessedImage(processed);
+      setConfigDraft((prev) => ({
+        ...prev,
+        faviconUrl: uploadedUrl,
+      }));
+      setStatusMessage(
+        'Ikon favicon berhasil diunggah. Klik "Simpan Pengaturan Website" untuk menerapkan.'
+      );
+    } catch (error) {
+      setErrorMessage(
+        error instanceof Error ? error.message : 'Gagal mengunggah favicon.'
+      );
+    } finally {
+      setIsUploadingFavicon(false);
+      e.target.value = '';
+    }
   };
 
   const handleSaveSiteConfig = async (e: React.FormEvent) => {
@@ -1260,6 +1288,134 @@ export function AdminPanel({
                     </div>
                   </div>
 
+                  {/* SEO & Metadata Settings */}
+                  <div className="pt-5 border-t border-black/[0.06]">
+                    <h3 className="font-serif-editorial text-xl font-medium">
+                      Pengaturan SEO &amp; Metadata
+                    </h3>
+                    <p className="text-xs text-[#6B6A65] mt-1">
+                      Atur pratinjau tautan media sosial (Open Graph), deskripsi
+                      mesin pencari, dan ikon tab peramban (favicon).
+                    </p>
+                    <div className="mt-4 grid grid-cols-1 gap-4">
+                      <div>
+                        <label
+                          htmlFor="cfg-og-title"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          Judul Open Graph &amp; Tab Browser
+                        </label>
+                        <input
+                          id="cfg-og-title"
+                          type="text"
+                          maxLength={140}
+                          value={configDraft.ogTitle}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              ogTitle: e.target.value,
+                            }))
+                          }
+                          placeholder={`${configDraft.brandName} — Galeri Fotografi Seni`}
+                          className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-1">
+                          <label
+                            htmlFor="cfg-meta-desc"
+                            className="block text-xs font-medium"
+                          >
+                            Meta Deskripsi SEO
+                          </label>
+                          <span className="text-[11px] text-[#6B6A65] tabular-nums">
+                            {configDraft.metaDescription.length}/320
+                          </span>
+                        </div>
+                        <textarea
+                          id="cfg-meta-desc"
+                          rows={2}
+                          maxLength={320}
+                          value={configDraft.metaDescription}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              metaDescription: e.target.value,
+                            }))
+                          }
+                          placeholder="Deskripsi ringkas galeri (disarankan 140–160 karakter)..."
+                          className="w-full px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="cfg-favicon-url"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          URL Favicon (Ikon Tab Browser)
+                        </label>
+                        <div className="flex flex-col sm:flex-row gap-2.5 sm:items-center">
+                          <div className="flex items-center gap-2.5 flex-1">
+                            <div className="w-10 h-10 shrink-0 rounded border border-black/[0.12] bg-[#FAF9F6] flex items-center justify-center overflow-hidden">
+                              <img
+                                src={configDraft.faviconUrl || '/favicon.svg'}
+                                alt="Pratinjau favicon"
+                                className="w-6 h-6 object-contain"
+                              />
+                            </div>
+                            <input
+                              id="cfg-favicon-url"
+                              type="text"
+                              maxLength={1200}
+                              value={configDraft.faviconUrl}
+                              onChange={(e) =>
+                                setConfigDraft((p) => ({
+                                  ...p,
+                                  faviconUrl: e.target.value,
+                                }))
+                              }
+                              placeholder="https://... atau unggah ikon PNG/WebP"
+                              className="flex-1 min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <label className="min-h-[42px] px-3.5 py-2 border border-black/[0.18] rounded-md text-xs font-medium inline-flex items-center gap-1.5 hover:bg-[#EFEDE8] cursor-pointer transition-colors whitespace-nowrap">
+                              <Upload className="w-3.5 h-3.5" aria-hidden="true" />
+                              <span>
+                                {isUploadingFavicon
+                                  ? 'Mengunggah...'
+                                  : 'Unggah Ikon'}
+                              </span>
+                              <input
+                                type="file"
+                                accept="image/png,image/webp,image/jpeg"
+                                onChange={handleFaviconFileChange}
+                                disabled={isUploadingFavicon}
+                                className="sr-only"
+                              />
+                            </label>
+                            {configDraft.faviconUrl && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setConfigDraft((p) => ({
+                                    ...p,
+                                    faviconUrl: '',
+                                  }))
+                                }
+                                className="min-h-[42px] px-3 text-xs text-[#6B6A65] hover:text-red-700"
+                              >
+                                Hapus
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Vercel Deployment Note */}
                   <div className="p-4 rounded-md bg-[#FAF9F6] border border-black/[0.07] text-xs text-[#4A4945] space-y-1.5 leading-relaxed">
                     <p className="font-medium text-[#141413]">
@@ -1280,7 +1436,7 @@ export function AdminPanel({
                   <div className="pt-2 flex justify-end">
                     <button
                       type="submit"
-                      disabled={isBusy}
+                      disabled={isBusy || isUploadingFavicon}
                       className="min-h-[44px] px-6 py-2 bg-[#141413] text-[#FAF9F6] text-[13px] font-medium rounded-md hover:bg-[#2B2B29] transition-colors disabled:opacity-50"
                     >
                       {isBusy ? 'Menyimpan...' : 'Simpan Pengaturan Website'}

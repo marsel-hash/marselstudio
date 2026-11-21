@@ -30,6 +30,9 @@ export interface SiteConfig {
   footerBrand: string;
   footerCopyright: string;
   categories: string[];
+  metaDescription: string;
+  ogTitle: string;
+  faviconUrl: string;
 }
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
@@ -48,6 +51,10 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
   footerBrand: 'Marsel Studio — Arsip Fotografi Seni',
   footerCopyright: '© 2026 Marsel Studio. Seluruh hak cipta dilindungi.',
   categories: ['Arsitektur', 'Alam', 'Potret', 'Cahaya'],
+  metaDescription:
+    'Galeri foto karya seni minimalis dan editorial berfokus pada pengalaman seluler dengan tata letak masonry yang tenang dan penampil layar penuh.',
+  ogTitle: 'Marsel Studio — Galeri Fotografi Seni',
+  faviconUrl: '',
 };
 
 export function clampString(value: string, maxLength: number): string {
