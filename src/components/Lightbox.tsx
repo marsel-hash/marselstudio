@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
 import type { Artwork } from '../types/gallery';
 import {
   isImagePreloaded,
+  markImagePreloaded,
   preloadImage,
   scheduleIdlePreload,
 } from '../utils/imagePreloader';
@@ -31,6 +32,9 @@ export function Lightbox({
 
   const touchStartRef = useRef<{ x: number; y: number } | null>(null);
   const swipeAxisRef = useRef<'x' | 'y' | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const artworkSrc = artwork?.src ?? '';
+  const prevSrcRef = useRef(artworkSrc);
 
   const goPrev = useCallback(() => {
     if (currentIndex === null || artworks.length <= 1) return;
@@ -45,11 +49,20 @@ export function Lightbox({
   }, [currentIndex, artworks.length, onChangeIndex]);
 
   useEffect(() => {
-    setImgError(false);
-    setDragOffsetX(0);
-    setDragOffsetY(0);
-    setIsCurrentReady(artwork ? isImagePreloaded(artwork.src) : false);
-  }, [currentIndex, artwork]);
+    if (prevSrcRef.current !== artworkSrc) {
+      prevSrcRef.current = artworkSrc;
+      setImgError(false);
+      setDragOffsetX(0);
+      setDragOffsetY(0);
+      setIsCurrentReady(artworkSrc ? isImagePreloaded(artworkSrc) : false);
+    }
+
+    const imgEl = imgRef.current;
+    if (artworkSrc && imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+      markImagePreloaded(artworkSrc);
+      setIsCurrentReady(true);
+    }
+  }, [artworkSrc]);
 
   // Smart bidirectional preloading (+1, -1 immediately; +2 on idle)
   useEffect(() => {
@@ -209,16 +222,20 @@ export function Lightbox({
           {!imgError ? (
             <div className="p-2 sm:p-3 bg-[#FDFCF9] border border-[#181715]/[0.08] shadow-[0_24px_60px_-20px_rgba(24,23,21,0.14)] rounded-[2px]">
               <img
+                ref={imgRef}
                 key={artwork.id}
                 src={artwork.src}
                 alt={`${artwork.title} — ${artwork.medium}`}
                 decoding="async"
                 fetchPriority="high"
                 referrerPolicy="no-referrer"
-                onLoad={() => setIsCurrentReady(true)}
+                onLoad={() => {
+                  markImagePreloaded(artwork.src);
+                  setIsCurrentReady(true);
+                }}
                 onError={() => setImgError(true)}
                 className={`max-h-[55dvh] sm:max-h-[68dvh] w-auto max-w-full object-contain transition-opacity duration-200 ${
-                  isCurrentReady ? 'opacity-100' : 'opacity-0'
+                  isCurrentReady ? 'opacity-100' : 'opacity-95'
                 }`}
               />
             </div>

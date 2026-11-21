@@ -19,6 +19,12 @@ export function isImagePreloaded(src: string): boolean {
   return completedUrls.has(src);
 }
 
+export function markImagePreloaded(src: string): void {
+  if (src) {
+    completedUrls.add(src);
+  }
+}
+
 /**
  * Preloads and asynchronously decodes an image URL so subsequent renders
  * paint immediately without main-thread decode jank.

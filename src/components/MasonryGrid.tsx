@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ImageOff } from 'lucide-react';
 import type { Artwork } from '../types/gallery';
-import { isImagePreloaded, preloadImage } from '../utils/imagePreloader';
+import {
+  isImagePreloaded,
+  markImagePreloaded,
+  preloadImage,
+} from '../utils/imagePreloader';
 
 interface MasonryGridProps {
   artworks: Artwork[];
@@ -48,10 +52,21 @@ function ArtworkTile({
   const [loaded, setLoaded] = useState(() => isImagePreloaded(artwork.src));
   const [hasError, setHasError] = useState(false);
   const tileRef = useRef<HTMLButtonElement | null>(null);
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const prevSrcRef = useRef(artwork.src);
 
   useEffect(() => {
-    setHasError(false);
-    setLoaded(isImagePreloaded(artwork.src));
+    if (prevSrcRef.current !== artwork.src) {
+      prevSrcRef.current = artwork.src;
+      setHasError(false);
+      setLoaded(isImagePreloaded(artwork.src));
+    }
+
+    const imgEl = imgRef.current;
+    if (imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+      markImagePreloaded(artwork.src);
+      setLoaded(true);
+    }
   }, [artwork.src]);
 
   useEffect(() => {
@@ -97,7 +112,7 @@ function ArtworkTile({
       onTouchStart={handleWarmIntent}
       aria-label={`View artwork ${artwork.title}, ${artwork.year}`}
       style={{
-        animationDelay: `${Math.min(plateNumber - 1, 8) * 45}ms`,
+        animationDelay: `${Math.min(plateNumber - 1, 6) * 35}ms`,
       }}
       className="animate-gallery-plate group relative block w-full text-left bg-[#FDFCF9] p-2 sm:p-2.5 border border-[#181715]/[0.08] rounded-[3px] transition-[border-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#181715]/[0.22] hover:shadow-[0_18px_40px_-16px_rgba(24,23,21,0.12)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7F5F0] active:scale-[0.99]"
     >
@@ -110,27 +125,27 @@ function ArtworkTile({
       >
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 bg-[#FDFCF9]/20 transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-            loaded || hasError ? 'opacity-0' : 'opacity-100 animate-pulse'
+          className={`pointer-events-none absolute inset-0 bg-[#FDFCF9]/15 transition-opacity duration-300 ease-out ${
+            loaded || hasError ? 'opacity-0' : 'opacity-100'
           }`}
         />
 
         {!hasError ? (
           <div className="w-full h-full transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.022]">
             <img
+              ref={imgRef}
               src={artwork.src}
               alt={`${artwork.title} — ${artwork.medium}`}
               loading={isAboveFold ? 'eager' : 'lazy'}
               fetchPriority={isAboveFold ? 'high' : 'auto'}
               decoding="async"
               referrerPolicy="no-referrer"
-              onLoad={() => setLoaded(true)}
+              onLoad={() => {
+                markImagePreloaded(artwork.src);
+                setLoaded(true);
+              }}
               onError={() => setHasError(true)}
-              className={`w-full h-full object-cover transition-[opacity,transform,filter] duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] will-change-[opacity,transform,filter] ${
-                loaded
-                  ? 'opacity-100 scale-100 blur-0'
-                  : 'opacity-0 scale-[1.03] blur-md'
-              }`}
+              className="w-full h-full object-cover"
             />
           </div>
         ) : (
