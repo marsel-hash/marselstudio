@@ -670,6 +670,12 @@ export function AdminPanel({
     setConfigDraft((prev) => ({
       ...DEFAULT_SITE_CONFIG,
       faviconUrl: prev.faviconUrl,
+      socialInstagram: prev.socialInstagram,
+      socialThreads: prev.socialThreads,
+      socialTwitter: prev.socialTwitter,
+      socialTiktok: prev.socialTiktok,
+      socialYoutube: prev.socialYoutube,
+      contactEmail: prev.contactEmail,
     }));
     setStatusMessage(
       'English editorial defaults loaded into form. Click "Save Website Settings" to publish.'
@@ -1706,6 +1712,155 @@ export function AdminPanel({
                               footerCopyright: e.target.value,
                             }))
                           }
+                          className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Social Media & Contact */}
+                  <div className="pt-5 border-t border-black/[0.06]">
+                    <h3 className="font-serif-editorial text-xl font-medium">
+                      Social Media &amp; Contact
+                    </h3>
+                    <p className="text-xs text-[#6B6A65] mt-1">
+                      Enter a full <code className="font-mono">https://</code> URL or handle (e.g. <code className="font-mono">@marselstudio</code>). Leave any field blank to hide it from the footer and About panel.
+                    </p>
+                    <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label
+                          htmlFor="cfg-social-ig"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          Instagram
+                        </label>
+                        <input
+                          id="cfg-social-ig"
+                          type="text"
+                          maxLength={300}
+                          value={configDraft.socialInstagram}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              socialInstagram: e.target.value,
+                            }))
+                          }
+                          placeholder="https://instagram.com/username or @username"
+                          className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="cfg-social-threads"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          Threads
+                        </label>
+                        <input
+                          id="cfg-social-threads"
+                          type="text"
+                          maxLength={300}
+                          value={configDraft.socialThreads}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              socialThreads: e.target.value,
+                            }))
+                          }
+                          placeholder="https://www.threads.net/@username or @username"
+                          className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="cfg-social-x"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          X / Twitter
+                        </label>
+                        <input
+                          id="cfg-social-x"
+                          type="text"
+                          maxLength={300}
+                          value={configDraft.socialTwitter}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              socialTwitter: e.target.value,
+                            }))
+                          }
+                          placeholder="https://x.com/username or @username"
+                          className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="cfg-social-tiktok"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          TikTok
+                        </label>
+                        <input
+                          id="cfg-social-tiktok"
+                          type="text"
+                          maxLength={300}
+                          value={configDraft.socialTiktok}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              socialTiktok: e.target.value,
+                            }))
+                          }
+                          placeholder="https://www.tiktok.com/@username or @username"
+                          className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="cfg-social-youtube"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          YouTube
+                        </label>
+                        <input
+                          id="cfg-social-youtube"
+                          type="text"
+                          maxLength={300}
+                          value={configDraft.socialYoutube}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              socialYoutube: e.target.value,
+                            }))
+                          }
+                          placeholder="https://www.youtube.com/@channel or @channel"
+                          className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
+                        />
+                      </div>
+
+                      <div>
+                        <label
+                          htmlFor="cfg-contact-email"
+                          className="block text-xs font-medium mb-1"
+                        >
+                          Contact Email
+                        </label>
+                        <input
+                          id="cfg-contact-email"
+                          type="email"
+                          maxLength={160}
+                          value={configDraft.contactEmail}
+                          onChange={(e) =>
+                            setConfigDraft((p) => ({
+                              ...p,
+                              contactEmail: e.target.value,
+                            }))
+                          }
+                          placeholder="studio@example.com"
                           className="w-full min-h-[42px] px-3 py-2 text-sm border border-black/[0.14] rounded-md bg-[#FAF9F6]"
                         />
                       </div>

@@ -33,6 +33,12 @@ export interface SiteConfig {
   metaDescription: string;
   ogTitle: string;
   faviconUrl: string;
+  socialInstagram: string;
+  socialThreads: string;
+  socialTwitter: string;
+  socialTiktok: string;
+  socialYoutube: string;
+  contactEmail: string;
 }
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
@@ -55,6 +61,12 @@ export const DEFAULT_SITE_CONFIG: SiteConfig = {
     'Minimalist editorial fine art photography gallery designed for mobile with a serene masonry layout and full-screen viewer.',
   ogTitle: 'Marsel Studio — Fine Art Photography Gallery',
   faviconUrl: '',
+  socialInstagram: '',
+  socialThreads: '',
+  socialTwitter: '',
+  socialTiktok: '',
+  socialYoutube: '',
+  contactEmail: '',
 };
 
 export function clampString(value: string, maxLength: number): string {
@@ -64,6 +76,38 @@ export function clampString(value: string, maxLength: number): string {
 export function isSafeImageUrl(url: string): boolean {
   const trimmed = url.trim();
   return /^(https?:\/\/|\/).+/.test(trimmed) && trimmed.length <= 1200;
+}
+
+export function isSafeHttpUrl(url: string, maxLength = 300): boolean {
+  const trimmed = url.trim();
+  return /^https?:\/\/.+/.test(trimmed) && trimmed.length <= maxLength;
+}
+
+export function isValidEmail(email: string): boolean {
+  const trimmed = email.trim();
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed) && trimmed.length <= 160;
+}
+
+export function normalizeSocialUrl(
+  raw: string,
+  baseDomainPrefix: string
+): string {
+  const trimmed = raw.trim();
+  if (!trimmed) return '';
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    return /^https?:\/\//i.test(trimmed) ? trimmed.slice(0, 300) : trimmed;
+  }
+  if (trimmed.startsWith('//')) {
+    return `https:${trimmed}`.slice(0, 300);
+  }
+  if (trimmed.startsWith('@')) {
+    return `${baseDomainPrefix}${trimmed.slice(1)}`.slice(0, 300);
+  }
+  const firstSegment = trimmed.split('/')[0] || '';
+  if (firstSegment.includes('.')) {
+    return `https://${trimmed}`.slice(0, 300);
+  }
+  return `${baseDomainPrefix}${trimmed}`.slice(0, 300);
 }
 
 export function isValidYear(year: string): boolean {

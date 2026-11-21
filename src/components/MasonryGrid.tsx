@@ -5,50 +5,55 @@ import { isImagePreloaded, preloadImage } from '../utils/imagePreloader';
 
 interface MasonryGridProps {
   artworks: Artwork[];
+  desktopColumns?: 2 | 3;
+  showCaptions?: boolean;
   onSelectArtwork: (artwork: Artwork) => void;
 }
 
-function useColumnCount(): number {
+function useColumnCount(desktopColumns: 2 | 3): number {
   const [cols, setCols] = useState<number>(() => {
     if (typeof window === 'undefined') return 2;
-    return window.innerWidth >= 768 ? 3 : 2;
+    return window.innerWidth >= 768 ? desktopColumns : 2;
   });
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 768px)');
-    const updateCols = () => setCols(mediaQuery.matches ? 3 : 2);
+    const updateCols = () =>
+      setCols(mediaQuery.matches ? desktopColumns : 2);
     updateCols();
     mediaQuery.addEventListener('change', updateCols);
     return () => mediaQuery.removeEventListener('change', updateCols);
-  }, []);
+  }, [desktopColumns]);
 
   return cols;
 }
 
 interface ArtworkTileProps {
   artwork: Artwork;
+  plateNumber: number;
   nextArtworkSrc?: string;
   isAboveFold: boolean;
+  showCaptions: boolean;
   onSelect: (artwork: Artwork) => void;
 }
 
 function ArtworkTile({
   artwork,
+  plateNumber,
   nextArtworkSrc,
   isAboveFold,
+  showCaptions,
   onSelect,
 }: ArtworkTileProps) {
   const [loaded, setLoaded] = useState(() => isImagePreloaded(artwork.src));
   const [hasError, setHasError] = useState(false);
   const tileRef = useRef<HTMLButtonElement | null>(null);
 
-  // Reset error/loaded states cleanly if the artwork source changes
   useEffect(() => {
     setHasError(false);
     setLoaded(isImagePreloaded(artwork.src));
   }, [artwork.src]);
 
-  // Lookahead IntersectionObserver: warms & async-decodes images slightly before entering viewport
   useEffect(() => {
     if (isAboveFold || loaded) return;
     const node = tileRef.current;
@@ -73,13 +78,14 @@ function ArtworkTile({
     return () => observer.disconnect();
   }, [artwork.src, isAboveFold, loaded]);
 
-  // Intent-triggered preloading: warms target photo and its immediate Lightbox neighbor
   const handleWarmIntent = () => {
     void preloadImage(artwork.src);
     if (nextArtworkSrc) {
       void preloadImage(nextArtworkSrc, { speculative: true });
     }
   };
+
+  const formattedPlate = String(plateNumber).padStart(2, '0');
 
   return (
     <button
@@ -90,25 +96,27 @@ function ArtworkTile({
       onFocus={handleWarmIntent}
       onTouchStart={handleWarmIntent}
       aria-label={`View artwork ${artwork.title}, ${artwork.year}`}
-      className="group relative block w-full text-left bg-[#EFEDE8] overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF9F6] transition-transform duration-150 active:scale-[0.988]"
+      style={{
+        animationDelay: `${Math.min(plateNumber - 1, 8) * 45}ms`,
+      }}
+      className="animate-gallery-plate group relative block w-full text-left bg-[#FDFCF9] p-2 sm:p-2.5 border border-[#181715]/[0.08] rounded-[3px] transition-[border-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#181715]/[0.22] hover:shadow-[0_18px_40px_-16px_rgba(24,23,21,0.12)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7F5F0] active:scale-[0.99]"
     >
       <figure
-        className="relative w-full m-0 overflow-hidden bg-[#EFEDE8]"
+        className="relative w-full m-0 overflow-hidden bg-[#EFECE4]"
         style={{
           aspectRatio: `${artwork.widthRatio} / ${artwork.heightRatio}`,
           backgroundImage: `linear-gradient(155deg, ${artwork.placeholderFrom} 0%, ${artwork.placeholderTo} 100%)`,
         }}
       >
-        {/* Quiet editorial tonal wash while image loads */}
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 bg-[#FAF9F6]/20 transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+          className={`pointer-events-none absolute inset-0 bg-[#FDFCF9]/20 transition-opacity duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
             loaded || hasError ? 'opacity-0' : 'opacity-100 animate-pulse'
           }`}
         />
 
         {!hasError ? (
-          <div className="w-full h-full transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.018]">
+          <div className="w-full h-full transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.022]">
             <img
               src={artwork.src}
               alt={`${artwork.title} — ${artwork.medium}`}
@@ -126,30 +134,54 @@ function ArtworkTile({
             />
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#EFEDE8] text-[#6B6A65]">
+          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#EFECE4] text-[#64615B]">
             <ImageOff className="w-5 h-5 mb-2 opacity-60" aria-hidden="true" />
-            <span className="font-serif-editorial text-sm text-[#141413]">
+            <span className="font-serif-editorial text-sm text-[#181715]">
               {artwork.title}
             </span>
           </div>
         )}
 
-        {/* Quiet desktop hover scrim for editorial context without cluttering mobile resting state */}
-        <figcaption className="hidden md:flex flex-col justify-end p-4 absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-          <span className="font-serif-editorial text-lg font-medium leading-snug text-[#FAF9F6]">
-            {artwork.title}
-          </span>
-          <span className="text-[12px] text-white/80 mt-0.5 tabular-nums">
-            {artwork.year} · {artwork.category}
-          </span>
-        </figcaption>
+        {!showCaptions && (
+          <figcaption className="hidden md:flex flex-col justify-end p-4 absolute inset-0 bg-gradient-to-t from-[#181715]/80 via-[#181715]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            <span className="font-serif-editorial text-lg font-medium leading-snug text-[#FDFCF9]">
+              {artwork.title}
+            </span>
+            <span className="text-[12px] text-[#FDFCF9]/80 mt-0.5 tabular-nums">
+              {artwork.year} · {artwork.category}
+            </span>
+          </figcaption>
+        )}
       </figure>
+
+      {showCaptions && (
+        <div className="pt-2.5 pb-0.5 px-0.5 flex items-baseline justify-between gap-2.5">
+          <div className="min-w-0">
+            <p className="font-serif-editorial text-[16px] sm:text-[18px] font-medium leading-snug text-[#181715] truncate group-hover:text-[#6E583B] transition-colors duration-200">
+              {artwork.title}
+            </p>
+            <p className="text-[11px] text-[#64615B] truncate mt-0.5">
+              {artwork.category}
+              <span aria-hidden="true"> · </span>
+              <span className="tabular-nums">{artwork.year}</span>
+            </p>
+          </div>
+          <span className="text-[11px] text-[#7D7972] tabular-nums shrink-0">
+            No. {formattedPlate}
+          </span>
+        </div>
+      )}
     </button>
   );
 }
 
-export function MasonryGrid({ artworks, onSelectArtwork }: MasonryGridProps) {
-  const columnCount = useColumnCount();
+export function MasonryGrid({
+  artworks,
+  desktopColumns = 3,
+  showCaptions = true,
+  onSelectArtwork,
+}: MasonryGridProps) {
+  const columnCount = useColumnCount(desktopColumns);
 
   const { columns, indexById } = useMemo(() => {
     const colArrays: Artwork[][] = Array.from({ length: columnCount }, () => []);
@@ -165,11 +197,13 @@ export function MasonryGrid({ artworks, onSelectArtwork }: MasonryGridProps) {
         }
       }
       colArrays[shortestIndex].push(item);
-      colHeights[shortestIndex] += item.heightRatio / item.widthRatio;
+      // Approximate visual weight of photo + optional plaque height
+      colHeights[shortestIndex] +=
+        item.heightRatio / item.widthRatio + (showCaptions ? 0.18 : 0);
     });
 
     return { columns: colArrays, indexById: idMap };
-  }, [artworks, columnCount]);
+  }, [artworks, columnCount, showCaptions]);
 
   if (artworks.length === 0) {
     return (
@@ -183,12 +217,12 @@ export function MasonryGrid({ artworks, onSelectArtwork }: MasonryGridProps) {
 
   return (
     <div
-      className={`grid gap-3 sm:gap-5 lg:gap-7 items-start ${
+      className={`grid gap-3.5 sm:gap-5 lg:gap-7 items-start ${
         columnCount === 3 ? 'grid-cols-3' : 'grid-cols-2'
       }`}
     >
       {columns.map((columnItems, colIdx) => (
-        <div key={colIdx} className="flex flex-col gap-3 sm:gap-5 lg:gap-7">
+        <div key={colIdx} className="flex flex-col gap-3.5 sm:gap-5 lg:gap-7">
           {columnItems.map((artwork) => {
             const globalIndex = indexById.get(artwork.id) ?? 0;
             const nextArtwork =
@@ -200,8 +234,10 @@ export function MasonryGrid({ artworks, onSelectArtwork }: MasonryGridProps) {
               <ArtworkTile
                 key={artwork.id}
                 artwork={artwork}
+                plateNumber={globalIndex + 1}
                 nextArtworkSrc={nextArtwork?.src}
                 isAboveFold={globalIndex < 4}
+                showCaptions={showCaptions}
                 onSelect={onSelectArtwork}
               />
             );

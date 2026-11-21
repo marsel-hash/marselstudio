@@ -17,9 +17,12 @@ import { DEFAULT_ARTWORKS } from '../data/artworks';
 import {
   clampString,
   DEFAULT_SITE_CONFIG,
+  isSafeHttpUrl,
   isSafeImageUrl,
+  isValidEmail,
   isValidHexColor,
   isValidYear,
+  normalizeSocialUrl,
   type Artwork,
   type SiteConfig,
 } from '../types/gallery';
@@ -101,6 +104,18 @@ export function subscribeSiteConfig(
               : DEFAULT_SITE_CONFIG.ogTitle,
           faviconUrl:
             typeof data.faviconUrl === 'string' ? data.faviconUrl : '',
+          socialInstagram:
+            typeof data.socialInstagram === 'string' ? data.socialInstagram : '',
+          socialThreads:
+            typeof data.socialThreads === 'string' ? data.socialThreads : '',
+          socialTwitter:
+            typeof data.socialTwitter === 'string' ? data.socialTwitter : '',
+          socialTiktok:
+            typeof data.socialTiktok === 'string' ? data.socialTiktok : '',
+          socialYoutube:
+            typeof data.socialYoutube === 'string' ? data.socialYoutube : '',
+          contactEmail:
+            typeof data.contactEmail === 'string' ? data.contactEmail : '',
         },
         true
       );
@@ -197,6 +212,44 @@ export async function saveSiteConfig(
     throw new Error('Favicon URL must start with https://, http://, or /.');
   }
 
+  const socialInstagram = normalizeSocialUrl(
+    config.socialInstagram || '',
+    'https://instagram.com/'
+  );
+  const socialThreads = normalizeSocialUrl(
+    config.socialThreads || '',
+    'https://www.threads.net/@'
+  );
+  const socialTwitter = normalizeSocialUrl(
+    config.socialTwitter || '',
+    'https://x.com/'
+  );
+  const socialTiktok = normalizeSocialUrl(
+    config.socialTiktok || '',
+    'https://www.tiktok.com/@'
+  );
+  const socialYoutube = normalizeSocialUrl(
+    config.socialYoutube || '',
+    'https://www.youtube.com/@'
+  );
+  const contactEmail = clampString(config.contactEmail || '', 160);
+
+  const socialEntries: Array<[string, string]> = [
+    ['Instagram', socialInstagram],
+    ['Threads', socialThreads],
+    ['X / Twitter', socialTwitter],
+    ['TikTok', socialTiktok],
+    ['YouTube', socialYoutube],
+  ];
+  for (const [label, value] of socialEntries) {
+    if (value && !isSafeHttpUrl(value, 300)) {
+      throw new Error(`${label} URL must start with https:// or http://.`);
+    }
+  }
+  if (contactEmail && !isValidEmail(contactEmail)) {
+    throw new Error('Contact email format is invalid.');
+  }
+
   const payload = {
     brandName,
     heroTitle,
@@ -213,6 +266,12 @@ export async function saveSiteConfig(
     metaDescription: clampString(config.metaDescription || '', 320),
     ogTitle: clampString(config.ogTitle || '', 140),
     faviconUrl,
+    socialInstagram,
+    socialThreads,
+    socialTwitter,
+    socialTiktok,
+    socialYoutube,
+    contactEmail,
     updatedAt: serverTimestamp(),
     updatedBy: uid,
   };

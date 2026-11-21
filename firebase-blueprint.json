@@ -87,6 +87,42 @@
           "description": "Safe URL for custom site favicon.",
           "maxLength": 1200
         },
+        "socialInstagram": {
+          "type": "string",
+          "description": "Instagram profile URL.",
+          "maxLength": 300,
+          "pattern": "^https?://.+"
+        },
+        "socialThreads": {
+          "type": "string",
+          "description": "Threads profile URL.",
+          "maxLength": 300,
+          "pattern": "^https?://.+"
+        },
+        "socialTwitter": {
+          "type": "string",
+          "description": "X / Twitter profile URL.",
+          "maxLength": 300,
+          "pattern": "^https?://.+"
+        },
+        "socialTiktok": {
+          "type": "string",
+          "description": "TikTok profile URL.",
+          "maxLength": 300,
+          "pattern": "^https?://.+"
+        },
+        "socialYoutube": {
+          "type": "string",
+          "description": "YouTube channel URL.",
+          "maxLength": 300,
+          "pattern": "^https?://.+"
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "Optional public contact email address.",
+          "maxLength": 160,
+          "pattern": "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
+        },
         "updatedAt": {
           "type": "string",
           "format": "date-time",

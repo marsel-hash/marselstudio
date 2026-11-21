@@ -8,6 +8,33 @@ interface HeaderProps {
   onOpenAbout: () => void;
 }
 
+function StudioMark() {
+  return (
+    <svg
+      viewBox="0 0 64 64"
+      fill="none"
+      aria-hidden="true"
+      className="w-7 h-7 shrink-0"
+    >
+      <rect width="64" height="64" rx="14" fill="#181715" />
+      <rect
+        x="11"
+        y="11"
+        width="42"
+        height="42"
+        rx="6"
+        stroke="#FDFCF9"
+        strokeOpacity="0.28"
+        strokeWidth="1.5"
+      />
+      <path
+        d="M19 45V19h4.2l8.8 14.6L40.8 19H45v26h-4V26.4L33.3 39h-2.6L23 26.4V45h-4Z"
+        fill="#FDFCF9"
+      />
+    </svg>
+  );
+}
+
 export function Header({
   brandName,
   categories,
@@ -18,8 +45,8 @@ export function Header({
   const allCategories = ['All', ...categories];
 
   return (
-    <header className="sticky top-0 z-30 h-14 bg-[#FAF9F6]/92 backdrop-blur-md border-b border-black/[0.06]">
-      <div className="max-w-6xl mx-auto h-full px-4 sm:px-8 lg:px-12 flex items-center justify-between gap-8">
+    <header className="sticky top-0 z-30 h-16 bg-[#F7F5F0]/90 backdrop-blur-md border-b border-[#181715]/[0.08]">
+      <div className="max-w-6xl mx-auto h-full px-4 sm:px-8 lg:px-12 flex items-center justify-between gap-6">
         <a
           href="#gallery"
           onClick={(e) => {
@@ -27,9 +54,10 @@ export function Header({
             onSelectCategory('All');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
-          className="font-serif-editorial text-[22px] sm:text-2xl font-medium tracking-tight text-[#141413] whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-sm"
+          className="inline-flex items-center gap-2.5 font-serif-editorial text-[22px] sm:text-[25px] font-medium tracking-tight text-[#181715] whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] rounded-sm"
         >
-          {brandName}
+          <StudioMark />
+          <span>{brandName}</span>
         </a>
 
         <nav
@@ -44,17 +72,17 @@ export function Header({
                 type="button"
                 onClick={() => onSelectCategory(category)}
                 aria-pressed={isActive}
-                className={`relative min-h-[44px] px-1 text-[13px] tracking-wide transition-colors duration-200 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-sm ${
+                className={`relative min-h-[44px] px-1 text-[13px] tracking-wide transition-colors duration-200 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] rounded-sm ${
                   isActive
-                    ? 'text-[#141413] font-medium'
-                    : 'text-[#6B6A65] hover:text-[#141413]'
+                    ? 'text-[#181715] font-medium'
+                    : 'text-[#64615B] hover:text-[#181715]'
                 }`}
               >
                 {category}
                 <span
                   aria-hidden="true"
-                  className={`absolute left-1 right-1 bottom-2.5 h-px bg-[#141413] transition-opacity duration-200 ${
-                    isActive ? 'opacity-100' : 'opacity-0'
+                  className={`absolute left-0 right-0 bottom-2.5 h-[1.5px] bg-[#181715] transition-all duration-200 origin-center ${
+                    isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'
                   }`}
                 />
               </button>
@@ -65,7 +93,7 @@ export function Header({
         <button
           type="button"
           onClick={onOpenAbout}
-          className="min-h-[44px] px-2 -mr-2 text-[13px] tracking-wide text-[#6B6A65] hover:text-[#141413] transition-colors duration-200 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-sm"
+          className="min-h-[44px] px-2 -mr-2 text-[13px] tracking-wide text-[#64615B] hover:text-[#181715] transition-colors duration-200 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] rounded-sm"
         >
           About
         </button>

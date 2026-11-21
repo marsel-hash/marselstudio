@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Columns2, Columns3 } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth, BOOTSTRAPPED_ADMIN_EMAIL } from './firebase';
 import { DEFAULT_ARTWORKS } from './data/artworks';
@@ -18,6 +19,7 @@ import { MasonryGrid } from './components/MasonryGrid';
 import { Lightbox } from './components/Lightbox';
 import { AboutModal } from './components/AboutModal';
 import { AdminPanel } from './components/AdminPanel';
+import { SocialLinks } from './components/SocialLinks';
 
 export default function App() {
   const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
@@ -32,6 +34,8 @@ export default function App() {
   const [activeCategory, setActiveCategory] = useState<CategoryKey>('All');
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
+  const [desktopColumns, setDesktopColumns] = useState<2 | 3>(3);
+  const [showCaptions, setShowCaptions] = useState(true);
   const [isAdminOpen, setIsAdminOpen] = useState(() => {
     if (typeof window === 'undefined') return false;
     return (
@@ -176,7 +180,7 @@ export default function App() {
   const mobileCategories = ['All', ...siteConfig.categories];
 
   return (
-    <div className="min-h-dvh flex flex-col bg-[#FAF9F6] text-[#141413]">
+    <div className="min-h-dvh flex flex-col bg-[#F7F5F0] text-[#181715]">
       <Header
         brandName={siteConfig.brandName}
         categories={siteConfig.categories}
@@ -192,13 +196,24 @@ export default function App() {
         id="gallery"
         className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-8 lg:px-12"
       >
-        {/* Quiet Editorial Intro */}
-        <section className="pt-8 pb-5 sm:pt-14 sm:pb-10">
-          <div className="max-w-xl">
-            <h1 className="font-serif-editorial text-3xl sm:text-[42px] font-medium leading-[1.15] tracking-tight text-[#141413] text-balance">
+        {/* Editorial Exhibition Hero */}
+        <section className="pt-8 pb-6 sm:pt-14 sm:pb-10 border-b border-[#181715]/[0.08]">
+          <div className="max-w-2xl">
+            {(siteConfig.aboutKicker || siteConfig.aboutPeriod) && (
+              <p className="text-[12px] text-[#64615B] tracking-wide mb-2.5">
+                <span>{siteConfig.aboutKicker}</span>
+                {siteConfig.aboutPeriod && (
+                  <>
+                    <span aria-hidden="true"> · </span>
+                    <span className="tabular-nums">{siteConfig.aboutPeriod}</span>
+                  </>
+                )}
+              </p>
+            )}
+            <h1 className="font-serif-editorial text-[34px] sm:text-[48px] lg:text-[54px] font-medium leading-[1.06] tracking-[-0.015em] text-[#181715] text-balance">
               {siteConfig.heroTitle}
             </h1>
-            <p className="mt-2.5 sm:mt-3 text-[14px] sm:text-[15px] leading-relaxed text-[#6B6A65]">
+            <p className="mt-3 sm:mt-4 max-w-xl text-[14px] sm:text-[15.5px] leading-[1.65] text-[#5B5852]">
               {siteConfig.heroSubtitle}
             </p>
           </div>
@@ -206,7 +221,7 @@ export default function App() {
           {/* Mobile Single-Line Category Strip */}
           <nav
             aria-label="Category filter"
-            className="md:hidden mt-5 -mx-4 px-4 flex items-center gap-5 overflow-x-auto no-scrollbar border-b border-black/[0.06]"
+            className="md:hidden mt-6 -mx-4 px-4 flex items-center gap-5 overflow-x-auto no-scrollbar border-t border-[#181715]/[0.07] pt-1"
           >
             {mobileCategories.map((category) => {
               const isActive = activeCategory === category;
@@ -216,16 +231,16 @@ export default function App() {
                   type="button"
                   onClick={() => setActiveCategory(category)}
                   aria-pressed={isActive}
-                  className={`relative min-h-[44px] py-2 text-[13px] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] ${
+                  className={`relative min-h-[44px] py-2 text-[13px] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] ${
                     isActive
-                      ? 'text-[#141413] font-medium'
-                      : 'text-[#6B6A65]'
+                      ? 'text-[#181715] font-medium'
+                      : 'text-[#64615B]'
                   }`}
                 >
                   {category}
                   <span
                     aria-hidden="true"
-                    className={`absolute left-0 right-0 bottom-0 h-[1.5px] bg-[#141413] transition-opacity duration-200 ${
+                    className={`absolute left-0 right-0 bottom-0 h-[1.5px] bg-[#181715] transition-opacity duration-200 ${
                       isActive ? 'opacity-100' : 'opacity-0'
                     }`}
                   />
@@ -235,29 +250,90 @@ export default function App() {
           </nav>
         </section>
 
-        {/* Artwork Count Whisper & Masonry Exhibition Wall */}
-        <section aria-label="Artwork gallery" className="pb-16 sm:pb-24">
-          <div className="mb-4 sm:mb-6 flex items-center justify-between text-[12px] text-[#6B6A65]">
-            <span>{activeCategory}</span>
-            <span className="tabular-nums">
-              {filteredArtworks.length}{' '}
-              {filteredArtworks.length === 1 ? 'Work' : 'Works'}
-            </span>
+        {/* Exhibition Toolbar & Masonry Wall */}
+        <section aria-label="Artwork gallery" className="pt-5 pb-16 sm:pt-7 sm:pb-24">
+          <div className="mb-5 sm:mb-7 flex flex-wrap items-center justify-between gap-3 text-[12px] text-[#64615B]">
+            <div className="flex items-center gap-2">
+              <span className="font-medium text-[#181715]">{activeCategory}</span>
+              <span aria-hidden="true">·</span>
+              <span className="tabular-nums">
+                {filteredArtworks.length}{' '}
+                {filteredArtworks.length === 1 ? 'Work' : 'Works'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setShowCaptions((v) => !v)}
+                aria-pressed={showCaptions}
+                className="min-h-[40px] px-3.5 text-[12px] text-[#5B5852] hover:text-[#181715] border border-[#181715]/[0.1] hover:border-[#181715]/25 bg-[#FDFCF9] rounded-md transition-colors whitespace-nowrap"
+              >
+                {showCaptions ? 'Hide Labels' : 'Show Labels'}
+              </button>
+
+              <div
+                role="group"
+                aria-label="Gallery columns"
+                className="hidden md:inline-flex items-center p-0.5 bg-[#EFECE4] rounded-md border border-[#181715]/[0.07]"
+              >
+                <button
+                  type="button"
+                  onClick={() => setDesktopColumns(2)}
+                  aria-label="2 columns view"
+                  aria-pressed={desktopColumns === 2}
+                  className={`min-h-[34px] px-2.5 inline-flex items-center gap-1.5 text-[11px] font-medium rounded transition-colors ${
+                    desktopColumns === 2
+                      ? 'bg-[#FDFCF9] text-[#181715] shadow-sm'
+                      : 'text-[#64615B] hover:text-[#181715]'
+                  }`}
+                >
+                  <Columns2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>2 Cols</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDesktopColumns(3)}
+                  aria-label="3 columns view"
+                  aria-pressed={desktopColumns === 3}
+                  className={`min-h-[34px] px-2.5 inline-flex items-center gap-1.5 text-[11px] font-medium rounded transition-colors ${
+                    desktopColumns === 3
+                      ? 'bg-[#FDFCF9] text-[#181715] shadow-sm'
+                      : 'text-[#64615B] hover:text-[#181715]'
+                  }`}
+                >
+                  <Columns3 className="w-3.5 h-3.5" aria-hidden="true" />
+                  <span>3 Cols</span>
+                </button>
+              </div>
+            </div>
           </div>
 
           <MasonryGrid
             artworks={filteredArtworks}
+            desktopColumns={desktopColumns}
+            showCaptions={showCaptions}
             onSelectArtwork={handleSelectArtwork}
           />
         </section>
       </main>
 
-      <footer className="border-t border-black/[0.06] py-8 px-4 sm:px-8 lg:px-12">
-        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-[12px] text-[#6B6A65]">
-          <span className="font-serif-editorial text-sm text-[#141413]">
-            {siteConfig.footerBrand}
-          </span>
-          <span>{siteConfig.footerCopyright}</span>
+      <footer className="bg-[#EFECE4] border-t border-[#181715]/[0.08] py-10 px-4 sm:px-8 lg:px-12">
+        <div className="max-w-6xl mx-auto flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-[12px] text-[#64615B]">
+          <div className="space-y-1">
+            <span className="block font-serif-editorial text-base font-medium text-[#181715]">
+              {siteConfig.footerBrand}
+            </span>
+            {siteConfig.aboutLocation && (
+              <span className="block text-[12px] text-[#64615B]">
+                {siteConfig.aboutLocation}
+              </span>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-5">
+            <SocialLinks config={siteConfig} variant="footer" />
+            <span>{siteConfig.footerCopyright}</span>
+          </div>
         </div>
       </footer>
 
