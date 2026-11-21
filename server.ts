@@ -4,6 +4,10 @@ import path from 'node:path';
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import {
+  processRecommendRequest,
+  type RecommendRequestBody,
+} from './server/recommendHandler.ts';
+import {
   processUploadRequest,
   type UploadRequestBody,
 } from './server/uploadHandler.ts';
@@ -30,7 +34,20 @@ async function startServer() {
       res.status(result.status).json(result.body);
     } catch (error) {
       console.error('Upload error:', error);
-      res.status(500).json({ error: 'Gagal memproses unggahan gambar.' });
+      res.status(500).json({ error: 'Failed to process image upload.' });
+    }
+  });
+
+  app.post('/api/recommend-artwork', async (req, res) => {
+    try {
+      const result = await processRecommendRequest(
+        req.headers.authorization,
+        (req.body || {}) as RecommendRequestBody
+      );
+      res.status(result.status).json(result.body);
+    } catch (error) {
+      console.error('Recommend error:', error);
+      res.status(500).json({ error: 'Failed to generate AI recommendation.' });
     }
   });
 

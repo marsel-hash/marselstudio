@@ -15,16 +15,16 @@ export function Header({
   onSelectCategory,
   onOpenAbout,
 }: HeaderProps) {
-  const allCategories = ['Semua', ...categories];
+  const allCategories = ['All', ...categories];
 
   return (
     <header className="sticky top-0 z-30 h-14 bg-[#FAF9F6]/92 backdrop-blur-md border-b border-black/[0.06]">
       <div className="max-w-6xl mx-auto h-full px-4 sm:px-8 lg:px-12 flex items-center justify-between gap-8">
         <a
-          href="#galeri"
+          href="#gallery"
           onClick={(e) => {
             e.preventDefault();
-            onSelectCategory('Semua');
+            onSelectCategory('All');
             window.scrollTo({ top: 0, behavior: 'smooth' });
           }}
           className="font-serif-editorial text-[22px] sm:text-2xl font-medium tracking-tight text-[#141413] whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-sm"
@@ -33,7 +33,7 @@ export function Header({
         </a>
 
         <nav
-          aria-label="Kategori galeri"
+          aria-label="Gallery categories"
           className="hidden md:flex items-center gap-7 overflow-x-auto no-scrollbar"
         >
           {allCategories.map((category) => {
@@ -67,7 +67,7 @@ export function Header({
           onClick={onOpenAbout}
           className="min-h-[44px] px-2 -mr-2 text-[13px] tracking-wide text-[#6B6A65] hover:text-[#141413] transition-colors duration-200 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-sm"
         >
-          Tentang
+          About
         </button>
       </div>
     </header>

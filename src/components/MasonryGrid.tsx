@@ -89,7 +89,7 @@ function ArtworkTile({
       onMouseEnter={handleWarmIntent}
       onFocus={handleWarmIntent}
       onTouchStart={handleWarmIntent}
-      aria-label={`Lihat karya ${artwork.title}, ${artwork.year}`}
+      aria-label={`View artwork ${artwork.title}, ${artwork.year}`}
       className="group relative block w-full text-left bg-[#EFEDE8] overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] focus-visible:ring-offset-2 focus-visible:ring-offset-[#FAF9F6] transition-transform duration-150 active:scale-[0.988]"
     >
       <figure
@@ -175,7 +175,7 @@ export function MasonryGrid({ artworks, onSelectArtwork }: MasonryGridProps) {
     return (
       <div className="py-20 text-center">
         <p className="font-serif-editorial text-xl text-[#141413]">
-          Belum ada karya dalam kategori ini.
+          No artworks in this category yet.
         </p>
       </div>
     );

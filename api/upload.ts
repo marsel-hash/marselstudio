@@ -56,7 +56,7 @@ async function getGooglePublicCerts(
 
   const res = await fetch(GOOGLE_CERTS_URL);
   if (!res.ok) {
-    throw new Error('Gagal mengambil sertifikat verifikasi Google.');
+    throw new Error('Failed to fetch Google verification certificates.');
   }
 
   const cacheControl = res.headers.get('cache-control') || '';
@@ -175,7 +175,7 @@ export default async function handler(
     const admin = await verifyAdminIdToken(req.headers.authorization);
     if (!admin) {
       res.status(401).json({
-        error: 'Akses ditolak. Hanya admin terverifikasi yang dapat mengunggah.',
+        error: 'Access denied. Only verified administrators can upload files.',
       });
       return;
     }
@@ -185,7 +185,7 @@ export default async function handler(
       try {
         parsedBody = JSON.parse(req.body) as UploadBody;
       } catch {
-        res.status(400).json({ error: 'Format JSON unggahan tidak valid.' });
+        res.status(400).json({ error: 'Invalid upload JSON payload.' });
         return;
       }
     } else if (req.body && typeof req.body === 'object') {
@@ -199,7 +199,7 @@ export default async function handler(
     const ext = ALLOWED_MIME_TYPES[contentType];
     if (!ext) {
       res.status(400).json({
-        error: 'Format gambar tidak didukung. Gunakan JPEG, PNG, atau WebP.',
+        error: 'Unsupported image format. Please use JPEG, PNG, or WebP.',
       });
       return;
     }
@@ -208,14 +208,14 @@ export default async function handler(
       typeof parsedBody.dataBase64 !== 'string' ||
       parsedBody.dataBase64.length === 0
     ) {
-      res.status(400).json({ error: 'Data gambar tidak ditemukan.' });
+      res.status(400).json({ error: 'Image data is missing.' });
       return;
     }
 
     const buffer = Buffer.from(parsedBody.dataBase64, 'base64');
     if (buffer.byteLength === 0 || buffer.byteLength > MAX_FILE_BYTES) {
       res.status(400).json({
-        error: 'Ukuran gambar terlalu besar (maksimal 3,5 MB setelah optimasi).',
+        error: 'Image is too large (maximum 3.5 MB after optimization).',
       });
       return;
     }
@@ -224,7 +224,7 @@ export default async function handler(
     if (!blobToken) {
       res.status(503).json({
         error:
-          'BLOB_READ_WRITE_TOKEN belum terpasang di Vercel Environment Variables. Tambahkan token tersebut lalu redeploy, atau tempel URL gambar langsung.',
+          'BLOB_READ_WRITE_TOKEN is not configured in Vercel Environment Variables. Add the token and redeploy, or paste a direct image URL.',
       });
       return;
     }
@@ -248,15 +248,15 @@ export default async function handler(
         detail.includes('token');
       res.status(isAccessOrPrivateError ? 403 : 500).json({
         error: isAccessOrPrivateError
-          ? `Token Vercel Blob ditolak atau store masih bertipe Private: ${detail}`
-          : `Gagal mengunggah ke Vercel Blob: ${detail}`,
+          ? `Vercel Blob token denied or store is Private: ${detail}`
+          : `Failed to upload to Vercel Blob: ${detail}`,
       });
     }
   } catch (error) {
     console.error('Vercel upload error:', error);
     const detail = error instanceof Error ? error.message : 'Unknown error';
     res.status(500).json({
-      error: `Gagal mengunggah ke Vercel Blob: ${detail}`,
+      error: `Failed to upload to Vercel Blob: ${detail}`,
     });
   }
 }

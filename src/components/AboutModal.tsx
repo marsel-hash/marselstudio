@@ -56,7 +56,7 @@ export function AboutModal({ isOpen, config, onClose }: AboutModalProps) {
           <button
             type="button"
             onClick={onClose}
-            aria-label="Tutup informasi galeri"
+            aria-label="Close gallery information"
             className="min-h-[44px] min-w-[44px] -mr-2 -mt-2 flex items-center justify-center text-[#6B6A65] hover:text-[#141413] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-sm"
           >
             <X className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />

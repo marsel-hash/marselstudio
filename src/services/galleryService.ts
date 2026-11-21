@@ -130,7 +130,7 @@ export function subscribeArtworks(
           title: String(d.title || ''),
           year: String(d.year || '2026'),
           medium: String(d.medium || ''),
-          category: String(d.category || 'Arsitektur'),
+          category: String(d.category || 'Architecture'),
           caption: typeof d.caption === 'string' ? d.caption : '',
           src: String(d.src || ''),
           widthRatio: Number(d.widthRatio) || 3,
@@ -158,11 +158,16 @@ export async function saveSiteConfig(
 ): Promise<void> {
   const cleanCategories = config.categories
     .map((c) => clampString(c, 32))
-    .filter((c) => c.length > 0 && c.toLowerCase() !== 'semua')
+    .filter(
+      (c) =>
+        c.length > 0 &&
+        c.toLowerCase() !== 'semua' &&
+        c.toLowerCase() !== 'all'
+    )
     .slice(0, 8);
 
   if (cleanCategories.length === 0) {
-    throw new Error('Minimal harus terdapat 1 kategori galeri.');
+    throw new Error('At least 1 gallery category is required.');
   }
 
   const brandName = clampString(config.brandName, 60);
@@ -184,12 +189,12 @@ export async function saveSiteConfig(
     !footerBrand ||
     !footerCopyright
   ) {
-    throw new Error('Semua kolom utama situs wajib diisi.');
+    throw new Error('All primary site fields are required.');
   }
 
   const faviconUrl = clampString(config.faviconUrl || '', 1200);
   if (faviconUrl && !isSafeImageUrl(faviconUrl)) {
-    throw new Error('URL favicon harus diawali https://, http://, atau /.');
+    throw new Error('Favicon URL must start with https://, http://, or /.');
   }
 
   const payload = {
@@ -248,13 +253,13 @@ function validateArtworkInput(input: ArtworkInput) {
     ? input.placeholderTo.trim()
     : '#B8B5AE';
 
-  if (!title) throw new Error('Judul karya wajib diisi.');
+  if (!title) throw new Error('Artwork title is required.');
   if (!isValidYear(year))
-    throw new Error('Tahun harus berupa 4 digit angka (contoh: 2026).');
-  if (!medium) throw new Error('Media / proses cetak wajib diisi.');
-  if (!category) throw new Error('Kategori karya wajib dipilih.');
+    throw new Error('Year must be a 4-digit number (e.g., 2026).');
+  if (!medium) throw new Error('Medium / print process is required.');
+  if (!category) throw new Error('Artwork category is required.');
   if (!isSafeImageUrl(src))
-    throw new Error('URL foto harus diawali https://, http://, atau /.');
+    throw new Error('Image URL must start with https://, http://, or /.');
 
   const widthRatio = Math.max(1, Math.min(10000, Math.round(input.widthRatio) || 3));
   const heightRatio = Math.max(1, Math.min(10000, Math.round(input.heightRatio) || 4));
@@ -320,6 +325,34 @@ export async function removeArtwork(id: string): Promise<void> {
     await deleteDoc(doc(db, ARTWORKS_COLLECTION, id));
   } catch (error) {
     handleFirestoreError(error, OperationType.DELETE, path);
+  }
+}
+
+export async function reorderArtworksOrder(
+  orderedItems: Artwork[]
+): Promise<void> {
+  if (orderedItems.length === 0) return;
+
+  try {
+    const batch = writeBatch(db);
+    let pendingUpdates = 0;
+
+    orderedItems.forEach((item, index) => {
+      const nextOrder = (index + 1) * 10;
+      if (item.sortOrder !== nextOrder) {
+        batch.update(doc(db, ARTWORKS_COLLECTION, item.id), {
+          sortOrder: nextOrder,
+          updatedAt: serverTimestamp(),
+        });
+        pendingUpdates += 1;
+      }
+    });
+
+    if (pendingUpdates > 0) {
+      await batch.commit();
+    }
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, ARTWORKS_COLLECTION);
   }
 }
 

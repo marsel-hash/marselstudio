@@ -29,7 +29,7 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
 
-  const [activeCategory, setActiveCategory] = useState<CategoryKey>('Semua');
+  const [activeCategory, setActiveCategory] = useState<CategoryKey>('All');
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [isAdminOpen, setIsAdminOpen] = useState(() => {
@@ -90,7 +90,7 @@ export default function App() {
   useEffect(() => {
     const resolvedTitle =
       siteConfig.ogTitle.trim() ||
-      `${siteConfig.brandName} — Galeri Fotografi Seni`;
+      `${siteConfig.brandName} — Fine Art Photography Gallery`;
     document.title = resolvedTitle;
 
     const setMeta = (selector: string, attrName: 'name' | 'property', attrVal: string, content: string) => {
@@ -142,15 +142,15 @@ export default function App() {
   // Reset activeCategory cleanly if admin removed the currently selected category
   useEffect(() => {
     if (
-      activeCategory !== 'Semua' &&
+      activeCategory !== 'All' &&
       !siteConfig.categories.includes(activeCategory)
     ) {
-      setActiveCategory('Semua');
+      setActiveCategory('All');
     }
   }, [activeCategory, siteConfig.categories]);
 
   const filteredArtworks = useMemo(() => {
-    if (activeCategory === 'Semua') return publicArtworks;
+    if (activeCategory === 'All') return publicArtworks;
     return publicArtworks.filter((item) => item.category === activeCategory);
   }, [publicArtworks, activeCategory]);
 
@@ -173,7 +173,7 @@ export default function App() {
     }
   };
 
-  const mobileCategories = ['Semua', ...siteConfig.categories];
+  const mobileCategories = ['All', ...siteConfig.categories];
 
   return (
     <div className="min-h-dvh flex flex-col bg-[#FAF9F6] text-[#141413]">
@@ -189,7 +189,7 @@ export default function App() {
       />
 
       <main
-        id="galeri"
+        id="gallery"
         className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-8 lg:px-12"
       >
         {/* Quiet Editorial Intro */}
@@ -205,7 +205,7 @@ export default function App() {
 
           {/* Mobile Single-Line Category Strip */}
           <nav
-            aria-label="Filter kategori"
+            aria-label="Category filter"
             className="md:hidden mt-5 -mx-4 px-4 flex items-center gap-5 overflow-x-auto no-scrollbar border-b border-black/[0.06]"
           >
             {mobileCategories.map((category) => {
@@ -236,10 +236,13 @@ export default function App() {
         </section>
 
         {/* Artwork Count Whisper & Masonry Exhibition Wall */}
-        <section aria-label="Daftar karya foto" className="pb-16 sm:pb-24">
+        <section aria-label="Artwork gallery" className="pb-16 sm:pb-24">
           <div className="mb-4 sm:mb-6 flex items-center justify-between text-[12px] text-[#6B6A65]">
             <span>{activeCategory}</span>
-            <span className="tabular-nums">{filteredArtworks.length} Karya</span>
+            <span className="tabular-nums">
+              {filteredArtworks.length}{' '}
+              {filteredArtworks.length === 1 ? 'Work' : 'Works'}
+            </span>
           </div>
 
           <MasonryGrid

@@ -53,7 +53,7 @@ async function getGooglePublicCerts(
 
   const res = await fetch(GOOGLE_CERTS_URL);
   if (!res.ok) {
-    throw new Error('Gagal mengambil sertifikat verifikasi Google.');
+    throw new Error('Failed to fetch Google verification certificates.');
   }
 
   const cacheControl = res.headers.get('cache-control') || '';
@@ -155,7 +155,7 @@ export async function processUploadRequest(
     return {
       status: 401,
       body: {
-        error: 'Akses ditolak. Hanya admin terverifikasi yang dapat mengunggah.',
+        error: 'Access denied. Only verified administrators can upload files.',
       },
     };
   }
@@ -167,7 +167,7 @@ export async function processUploadRequest(
     return {
       status: 400,
       body: {
-        error: 'Format gambar tidak didukung. Gunakan JPEG, PNG, atau WebP.',
+        error: 'Unsupported image format. Please use JPEG, PNG, or WebP.',
       },
     };
   }
@@ -175,7 +175,7 @@ export async function processUploadRequest(
   if (typeof body.dataBase64 !== 'string' || body.dataBase64.length === 0) {
     return {
       status: 400,
-      body: { error: 'Data gambar tidak ditemukan.' },
+      body: { error: 'Image data is missing.' },
     };
   }
 
@@ -183,7 +183,7 @@ export async function processUploadRequest(
   if (buffer.byteLength === 0 || buffer.byteLength > MAX_FILE_BYTES) {
     return {
       status: 400,
-      body: { error: 'Ukuran gambar maksimal 4 MB.' },
+      body: { error: 'Maximum image size is 4 MB.' },
     };
   }
 
@@ -215,7 +215,7 @@ export async function processUploadRequest(
           status: 403,
           body: {
             error:
-              'Token Vercel Blob tidak valid atau store bertipe Private. Pastikan BLOB_READ_WRITE_TOKEN dari Blob Store Public sudah dipasang di Vercel lalu Redeploy.',
+              'Invalid Vercel Blob token or private store. Connect a Public Blob Store in Vercel and redeploy.',
           },
         };
       } else {
@@ -229,7 +229,7 @@ export async function processUploadRequest(
   const targetPath = path.resolve(uploadsDir, safeName);
 
   if (!targetPath.startsWith(uploadsDir + path.sep)) {
-    return { status: 400, body: { error: 'Nama berkas tidak valid.' } };
+    return { status: 400, body: { error: 'Invalid filename.' } };
   }
 
   await fs.writeFile(targetPath, buffer);

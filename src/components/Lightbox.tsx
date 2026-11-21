@@ -155,7 +155,7 @@ export function Lightbox({
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={`Detail karya: ${artwork.title}`}
+      aria-label={`Artwork details: ${artwork.title}`}
       className="fixed inset-0 z-50 bg-[#FAF9F6]/[0.98] backdrop-blur-sm flex flex-col justify-between select-none"
       style={{
         opacity: Math.max(0.45, 1 - dragOffsetY / 360),
@@ -171,10 +171,10 @@ export function Lightbox({
         <button
           type="button"
           onClick={onClose}
-          aria-label="Tutup tampilan penuh"
+          aria-label="Close full screen view"
           className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center gap-1.5 px-2 text-[13px] text-[#141413] hover:text-[#6B6A65] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-sm"
         >
-          <span className="hidden sm:inline">Tutup</span>
+          <span className="hidden sm:inline">Close</span>
           <X className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
         </button>
       </div>
@@ -190,7 +190,7 @@ export function Lightbox({
           <button
             type="button"
             onClick={goPrev}
-            aria-label="Foto sebelumnya"
+            aria-label="Previous photo"
             className="hidden sm:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#6B6A65] hover:text-[#141413] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-full"
           >
             <ChevronLeft className="w-6 h-6" strokeWidth={1.5} aria-hidden="true" />
@@ -234,7 +234,7 @@ export function Lightbox({
           <button
             type="button"
             onClick={goNext}
-            aria-label="Foto berikutnya"
+            aria-label="Next photo"
             className="hidden sm:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#6B6A65] hover:text-[#141413] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-full"
           >
             <ChevronRight className="w-6 h-6" strokeWidth={1.5} aria-hidden="true" />
@@ -268,17 +268,17 @@ export function Lightbox({
               className="min-h-[44px] px-3 -ml-3 flex items-center gap-1.5 text-[13px] font-medium text-[#141413] active:opacity-60 transition-opacity"
             >
               <ChevronLeft className="w-4 h-4" strokeWidth={1.6} aria-hidden="true" />
-              <span>Sebelumnya</span>
+              <span>Previous</span>
             </button>
 
-            <span className="text-[11px] text-[#6B6A65]">Geser foto</span>
+            <span className="text-[11px] text-[#6B6A65]">Swipe photo</span>
 
             <button
               type="button"
               onClick={goNext}
               className="min-h-[44px] px-3 -mr-3 flex items-center gap-1.5 text-[13px] font-medium text-[#141413] active:opacity-60 transition-opacity"
             >
-              <span>Berikutnya</span>
+              <span>Next</span>
               <ChevronRight className="w-4 h-4" strokeWidth={1.6} aria-hidden="true" />
             </button>
           </div>

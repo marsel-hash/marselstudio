@@ -37,23 +37,23 @@ export interface SiteConfig {
 
 export const DEFAULT_SITE_CONFIG: SiteConfig = {
   brandName: 'Marsel Studio',
-  heroTitle: 'Ruang Sunyi Cahaya & Bentuk',
+  heroTitle: 'Quiet Spaces of Light & Form',
   heroSubtitle:
-    'Kumpulan fotografi seni terpilih mengenai arsitektur, alam, dan keheningan keseharian. Ketuk karya untuk menikmati detail penuh.',
-  aboutKicker: 'Catatan Kuratorial',
-  aboutTitle: 'Marsel Studio — Arsip Fotografi',
+    'A curated collection of fine art photography exploring architecture, nature, and everyday stillness. Tap any work to view in full detail.',
+  aboutKicker: 'Curatorial Note',
+  aboutTitle: 'Marsel Studio — Photography Archive',
   aboutParagraph1:
-    'Marsel Studio adalah ruang pamer fotografi seni yang menghimpun studi tentang cahaya tenang, bentuk arsitektural, lanskap hening, dan keintiman keseharian. Setiap karya disajikan dalam proporsi aslinya agar komposisi visual tetap utuh di layar ponsel maupun desktop.',
+    'Marsel Studio is a fine art photography space dedicated to quiet light, architectural geometry, serene landscapes, and intimate moments. Every photograph is presented in its original proportions so visual composition remains intact across mobile and desktop.',
   aboutParagraph2:
-    'Seluruh karya dikurasi dalam edisi cetak arsip terbatas menggunakan kertas katun bebas asam dan proses pigmentasi berketahanan panjang.',
-  aboutPeriod: 'Kurasi Terpilih · 2023–2026',
+    'All works are curated in limited archival editions printed on acid-free cotton rag using long-life pigment inks.',
+  aboutPeriod: 'Selected Curation · 2023–2026',
   aboutLocation: 'Jakarta & Yogyakarta',
-  footerBrand: 'Marsel Studio — Arsip Fotografi Seni',
-  footerCopyright: '© 2026 Marsel Studio. Seluruh hak cipta dilindungi.',
-  categories: ['Arsitektur', 'Alam', 'Potret', 'Cahaya'],
+  footerBrand: 'Marsel Studio — Fine Art Photography Archive',
+  footerCopyright: '© 2026 Marsel Studio. All rights reserved.',
+  categories: ['Architecture', 'Nature', 'Portrait', 'Light'],
   metaDescription:
-    'Galeri foto karya seni minimalis dan editorial berfokus pada pengalaman seluler dengan tata letak masonry yang tenang dan penampil layar penuh.',
-  ogTitle: 'Marsel Studio — Galeri Fotografi Seni',
+    'Minimalist editorial fine art photography gallery designed for mobile with a serene masonry layout and full-screen viewer.',
+  ogTitle: 'Marsel Studio — Fine Art Photography Gallery',
   faviconUrl: '',
 };
 

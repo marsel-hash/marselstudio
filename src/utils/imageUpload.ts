@@ -49,7 +49,7 @@ export async function processImageFile(
   file: File
 ): Promise<ProcessedImageResult> {
   if (!file.type.startsWith('image/')) {
-    throw new Error('File yang dipilih harus berupa gambar (JPEG, PNG, atau WebP).');
+    throw new Error('Selected file must be an image (JPEG, PNG, or WebP).');
   }
 
   const objectUrl = URL.createObjectURL(file);
@@ -57,7 +57,7 @@ export async function processImageFile(
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
       el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error('Gagal membaca dimensi gambar.'));
+      el.onerror = () => reject(new Error('Failed to read image dimensions.'));
       el.src = objectUrl;
     });
 
@@ -95,7 +95,7 @@ export async function processImageFile(
     canvas.height = targetH;
     const ctx = canvas.getContext('2d');
     if (!ctx) {
-      throw new Error('Canvas tidak tersedia di peramban ini.');
+      throw new Error('Canvas is not available in this browser.');
     }
     ctx.drawImage(img, 0, 0, targetW, targetH);
 
@@ -118,7 +118,7 @@ export async function processImageFile(
       file.name
         .replace(/\.[^/.]+$/, '')
         .replace(/[^a-zA-Z0-9_-]/g, '-')
-        .slice(0, 40) || 'karya';
+        .slice(0, 40) || 'artwork';
 
     return {
       dataBase64,
@@ -139,7 +139,7 @@ export async function uploadProcessedImage(
 ): Promise<string> {
   const user = auth.currentUser;
   if (!user) {
-    throw new Error('Silakan masuk sebagai admin terlebih dahulu.');
+    throw new Error('Please sign in as an administrator first.');
   }
 
   const idToken = await user.getIdToken();
@@ -167,7 +167,7 @@ export async function uploadProcessedImage(
   if (!response.ok || !payload.url) {
     throw new Error(
       payload.error ||
-        `Gagal mengunggah gambar (HTTP ${response.status}). Pastikan BLOB_READ_WRITE_TOKEN sudah terpasang di Vercel.`
+        `Failed to upload image (HTTP ${response.status}). Make sure BLOB_READ_WRITE_TOKEN is configured in Vercel.`
     );
   }
 
