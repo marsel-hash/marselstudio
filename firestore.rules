@@ -194,7 +194,7 @@ service cloud.firestore {
     }
 
     match /artworks/{artworkId} {
-      allow get: if isValidId(artworkId) && (existing().published == true || isAdmin());
+      allow get: if isValidId(artworkId) && ((resource != null && existing().published == true) || isAdmin());
       allow list: if resource.data.published == true || isBootstrappedAdmin();
       allow create: if isValidId(artworkId) &&
         isValidArtwork(incoming()) &&

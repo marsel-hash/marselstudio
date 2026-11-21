@@ -188,15 +188,40 @@ export async function processUploadRequest(
   }
 
   const safeName = `${Date.now()}-${crypto.randomUUID().slice(0, 12)}.${ext}`;
+  const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim();
 
-  if (process.env.BLOB_READ_WRITE_TOKEN) {
-    const blob = await put(`gallery/${safeName}`, buffer, {
-      access: 'public',
-      contentType,
-      addRandomSuffix: false,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
-    return { status: 200, body: { url: blob.url } };
+  if (blobToken) {
+    try {
+      const blob = await put(`gallery/${safeName}`, buffer, {
+        access: 'public',
+        contentType,
+        addRandomSuffix: false,
+        token: blobToken,
+      });
+      return { status: 200, body: { url: blob.url } };
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      const isBlobConfigError =
+        detail.includes('Access denied') ||
+        detail.includes('private store') ||
+        detail.includes('token');
+
+      if (!process.env.VERCEL && isBlobConfigError) {
+        console.warn(
+          'Vercel Blob token unavailable or private in dev runtime; using local /uploads fallback.'
+        );
+      } else if (isBlobConfigError) {
+        return {
+          status: 403,
+          body: {
+            error:
+              'Token Vercel Blob tidak valid atau store bertipe Private. Pastikan BLOB_READ_WRITE_TOKEN dari Blob Store Public sudah dipasang di Vercel lalu Redeploy.',
+          },
+        };
+      } else {
+        throw error;
+      }
+    }
   }
 
   const uploadsDir = path.resolve(process.cwd(), 'uploads');

@@ -2,6 +2,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   onSnapshot,
   query,
   serverTimestamp,
@@ -324,35 +325,53 @@ export async function removeArtwork(id: string): Promise<void> {
 
 export async function seedInitialGallery(uid: string): Promise<void> {
   try {
+    const [configSnap, artworkSnaps] = await Promise.all([
+      getDoc(doc(db, 'siteConfig', 'main')),
+      Promise.all(
+        DEFAULT_ARTWORKS.map((item) =>
+          getDoc(doc(db, ARTWORKS_COLLECTION, item.id))
+        )
+      ),
+    ]);
+
     const batch = writeBatch(db);
+    let pendingWrites = 0;
 
-    batch.set(doc(db, 'siteConfig', 'main'), {
-      ...DEFAULT_SITE_CONFIG,
-      updatedAt: serverTimestamp(),
-      updatedBy: uid,
-    });
-
-    for (const item of DEFAULT_ARTWORKS) {
-      batch.set(doc(db, ARTWORKS_COLLECTION, item.id), {
-        title: item.title,
-        year: item.year,
-        medium: item.medium,
-        category: item.category,
-        caption: item.caption,
-        src: item.src,
-        widthRatio: item.widthRatio,
-        heightRatio: item.heightRatio,
-        placeholderFrom: item.placeholderFrom,
-        placeholderTo: item.placeholderTo,
-        sortOrder: item.sortOrder,
-        published: item.published,
-        authorId: uid,
-        createdAt: serverTimestamp(),
+    if (!configSnap.exists()) {
+      batch.set(doc(db, 'siteConfig', 'main'), {
+        ...DEFAULT_SITE_CONFIG,
         updatedAt: serverTimestamp(),
+        updatedBy: uid,
       });
+      pendingWrites += 1;
     }
 
-    await batch.commit();
+    DEFAULT_ARTWORKS.forEach((item, index) => {
+      if (!artworkSnaps[index]?.exists()) {
+        batch.set(doc(db, ARTWORKS_COLLECTION, item.id), {
+          title: item.title,
+          year: item.year,
+          medium: item.medium,
+          category: item.category,
+          caption: item.caption,
+          src: item.src,
+          widthRatio: item.widthRatio,
+          heightRatio: item.heightRatio,
+          placeholderFrom: item.placeholderFrom,
+          placeholderTo: item.placeholderTo,
+          sortOrder: item.sortOrder,
+          published: item.published,
+          authorId: uid,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+        pendingWrites += 1;
+      }
+    });
+
+    if (pendingWrites > 0) {
+      await batch.commit();
+    }
   } catch (error) {
     handleFirestoreError(error, OperationType.WRITE, 'seedInitialGallery');
   }

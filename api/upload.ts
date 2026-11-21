@@ -220,7 +220,8 @@ export default async function handler(
       return;
     }
 
-    if (!process.env.BLOB_READ_WRITE_TOKEN) {
+    const blobToken = process.env.BLOB_READ_WRITE_TOKEN?.trim();
+    if (!blobToken) {
       res.status(503).json({
         error:
           'BLOB_READ_WRITE_TOKEN belum terpasang di Vercel Environment Variables. Tambahkan token tersebut lalu redeploy, atau tempel URL gambar langsung.',
@@ -229,14 +230,28 @@ export default async function handler(
     }
 
     const safeName = `${Date.now()}-${crypto.randomUUID().slice(0, 12)}.${ext}`;
-    const blob = await put(`gallery/${safeName}`, buffer, {
-      access: 'public',
-      contentType,
-      addRandomSuffix: false,
-      token: process.env.BLOB_READ_WRITE_TOKEN,
-    });
+    try {
+      const blob = await put(`gallery/${safeName}`, buffer, {
+        access: 'public',
+        contentType,
+        addRandomSuffix: false,
+        token: blobToken,
+      });
 
-    res.status(200).json({ url: blob.url });
+      res.status(200).json({ url: blob.url });
+    } catch (blobError) {
+      const detail =
+        blobError instanceof Error ? blobError.message : 'Unknown error';
+      const isAccessOrPrivateError =
+        detail.includes('Access denied') ||
+        detail.includes('private store') ||
+        detail.includes('token');
+      res.status(isAccessOrPrivateError ? 403 : 500).json({
+        error: isAccessOrPrivateError
+          ? `Token Vercel Blob ditolak atau store masih bertipe Private: ${detail}`
+          : `Gagal mengunggah ke Vercel Blob: ${detail}`,
+      });
+    }
   } catch (error) {
     console.error('Vercel upload error:', error);
     const detail = error instanceof Error ? error.message : 'Unknown error';
