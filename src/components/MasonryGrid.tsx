@@ -11,6 +11,7 @@ interface MasonryGridProps {
   artworks: Artwork[];
   desktopColumns?: 2 | 3;
   showCaptions?: boolean;
+  isLoading?: boolean;
   onSelectArtwork: (artwork: Artwork) => void;
 }
 
@@ -194,6 +195,7 @@ export function MasonryGrid({
   artworks,
   desktopColumns = 3,
   showCaptions = true,
+  isLoading = false,
   onSelectArtwork,
 }: MasonryGridProps) {
   const columnCount = useColumnCount(desktopColumns);
@@ -219,6 +221,37 @@ export function MasonryGrid({
 
     return { columns: colArrays, indexById: idMap };
   }, [artworks, columnCount, showCaptions]);
+
+  if (isLoading) {
+    const skeletonRatios = ['4 / 3', '3 / 4', '4 / 3'];
+    return (
+      <div
+        aria-busy="true"
+        aria-label="Loading artworks"
+        className={`grid gap-3.5 sm:gap-5 lg:gap-7 items-start ${
+          columnCount === 3 ? 'grid-cols-3' : 'grid-cols-2'
+        }`}
+      >
+        {Array.from({ length: columnCount }).map((_, idx) => (
+          <div
+            key={idx}
+            className="bg-[#FDFCF9] p-2 sm:p-2.5 border border-[#181715]/[0.08] rounded-[3px]"
+          >
+            <div
+              className="w-full bg-[#EFECE4] animate-pulse"
+              style={{ aspectRatio: skeletonRatios[idx % skeletonRatios.length] }}
+            />
+            {showCaptions && (
+              <div className="pt-2.5 pb-1 px-0.5 space-y-2">
+                <div className="h-4 w-2/3 bg-[#EFECE4] rounded-[2px] animate-pulse" />
+                <div className="h-3 w-1/3 bg-[#EFECE4] rounded-[2px] animate-pulse" />
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    );
+  }
 
   if (artworks.length === 0) {
     return (

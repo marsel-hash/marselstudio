@@ -20,13 +20,32 @@ import { Lightbox } from './components/Lightbox';
 import { AboutModal } from './components/AboutModal';
 import { AdminPanel } from './components/AdminPanel';
 import { SocialLinks } from './components/SocialLinks';
+import { readGalleryCache, writeGalleryCache } from './utils/galleryCache';
 
 export default function App() {
-  const [siteConfig, setSiteConfig] = useState<SiteConfig>(DEFAULT_SITE_CONFIG);
-  const [configExistsInDb, setConfigExistsInDb] = useState(false);
+  const [initialCache] = useState(() => readGalleryCache());
 
-  const [dbArtworks, setDbArtworks] = useState<Artwork[]>([]);
-  const [artworksExistInDb, setArtworksExistInDb] = useState(false);
+  const [siteConfig, setSiteConfig] = useState<SiteConfig>(
+    () => initialCache?.siteConfig ?? DEFAULT_SITE_CONFIG
+  );
+  const [configExistsInDb, setConfigExistsInDb] = useState<boolean>(
+    () => initialCache?.configExistsInDb ?? false
+  );
+  const [configReady, setConfigReady] = useState<boolean>(() =>
+    Boolean(initialCache)
+  );
+  const [hasSyncedConfig, setHasSyncedConfig] = useState(false);
+
+  const [dbArtworks, setDbArtworks] = useState<Artwork[]>(
+    () => initialCache?.publishedArtworks ?? []
+  );
+  const [artworksExistInDb, setArtworksExistInDb] = useState<boolean>(
+    () => initialCache?.artworksExistInDb ?? false
+  );
+  const [artworksReady, setArtworksReady] = useState<boolean>(() =>
+    Boolean(initialCache)
+  );
+  const [hasSyncedArtworks, setHasSyncedArtworks] = useState(false);
 
   const [user, setUser] = useState<User | null>(null);
   const [authReady, setAuthReady] = useState(false);
@@ -74,21 +93,44 @@ export default function App() {
     const unsubConfig = subscribeSiteConfig((config, exists) => {
       setSiteConfig(config);
       setConfigExistsInDb(exists);
+      setConfigReady(true);
+      setHasSyncedConfig(true);
     });
     return () => unsubConfig();
   }, []);
 
+  const includeDrafts = authReady && isBootstrappedAdmin;
+
   useEffect(() => {
-    if (!authReady) return;
     const unsubArtworks = subscribeArtworks(
-      isBootstrappedAdmin,
+      includeDrafts,
       (items, hasDocs) => {
         setDbArtworks(items);
         setArtworksExistInDb(hasDocs);
+        setArtworksReady(true);
+        setHasSyncedArtworks(true);
       }
     );
     return () => unsubArtworks();
-  }, [authReady, isBootstrappedAdmin]);
+  }, [includeDrafts]);
+
+  useEffect(() => {
+    if (!hasSyncedConfig || !hasSyncedArtworks) return;
+    if (!configExistsInDb && !artworksExistInDb) return;
+    writeGalleryCache({
+      siteConfig,
+      configExistsInDb,
+      publishedArtworks: dbArtworks.filter((item) => item.published),
+      artworksExistInDb,
+    });
+  }, [
+    hasSyncedConfig,
+    hasSyncedArtworks,
+    configExistsInDb,
+    artworksExistInDb,
+    siteConfig,
+    dbArtworks,
+  ]);
 
   // Sync page <title>, SEO meta tags, Open Graph tags, and favicon with siteConfig
   useEffect(() => {
@@ -130,13 +172,18 @@ export default function App() {
     siteConfig.faviconUrl,
   ]);
 
-  // Show curated defaults until admin initializes Firestore
+  const isGalleryReady = configReady && artworksReady;
+
+  // Show curated defaults only after Firestore confirms DB has not been initialized
   const allManagedArtworks = useMemo(() => {
+    if (!isGalleryReady) {
+      return [];
+    }
     if (configExistsInDb || artworksExistInDb) {
       return dbArtworks;
     }
     return DEFAULT_ARTWORKS;
-  }, [configExistsInDb, artworksExistInDb, dbArtworks]);
+  }, [isGalleryReady, configExistsInDb, artworksExistInDb, dbArtworks]);
 
   const publicArtworks = useMemo(
     () => allManagedArtworks.filter((item) => item.published),
@@ -183,7 +230,7 @@ export default function App() {
     <div className="min-h-dvh flex flex-col bg-[#F7F5F0] text-[#181715]">
       <Header
         brandName={siteConfig.brandName}
-        categories={siteConfig.categories}
+        categories={configReady ? siteConfig.categories : []}
         activeCategory={activeCategory}
         onSelectCategory={(cat) => {
           setActiveCategory(cat);
@@ -219,35 +266,37 @@ export default function App() {
           </div>
 
           {/* Mobile Single-Line Category Strip */}
-          <nav
-            aria-label="Category filter"
-            className="md:hidden mt-6 -mx-4 px-4 flex items-center gap-5 overflow-x-auto no-scrollbar border-t border-[#181715]/[0.07] pt-1"
-          >
-            {mobileCategories.map((category) => {
-              const isActive = activeCategory === category;
-              return (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => setActiveCategory(category)}
-                  aria-pressed={isActive}
-                  className={`relative min-h-[44px] py-2 text-[13px] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] ${
-                    isActive
-                      ? 'text-[#181715] font-medium'
-                      : 'text-[#64615B]'
-                  }`}
-                >
-                  {category}
-                  <span
-                    aria-hidden="true"
-                    className={`absolute left-0 right-0 bottom-0 h-[1.5px] bg-[#181715] transition-opacity duration-200 ${
-                      isActive ? 'opacity-100' : 'opacity-0'
+          {configReady && (
+            <nav
+              aria-label="Category filter"
+              className="md:hidden mt-6 -mx-4 px-4 flex items-center gap-5 overflow-x-auto no-scrollbar border-t border-[#181715]/[0.07] pt-1"
+            >
+              {mobileCategories.map((category) => {
+                const isActive = activeCategory === category;
+                return (
+                  <button
+                    key={category}
+                    type="button"
+                    onClick={() => setActiveCategory(category)}
+                    aria-pressed={isActive}
+                    className={`relative min-h-[44px] py-2 text-[13px] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] ${
+                      isActive
+                        ? 'text-[#181715] font-medium'
+                        : 'text-[#64615B]'
                     }`}
-                  />
-                </button>
-              );
-            })}
-          </nav>
+                  >
+                    {category}
+                    <span
+                      aria-hidden="true"
+                      className={`absolute left-0 right-0 bottom-0 h-[1.5px] bg-[#181715] transition-opacity duration-200 ${
+                        isActive ? 'opacity-100' : 'opacity-0'
+                      }`}
+                    />
+                  </button>
+                );
+              })}
+            </nav>
+          )}
         </section>
 
         {/* Exhibition Toolbar & Masonry Wall */}
@@ -257,8 +306,11 @@ export default function App() {
               <span className="font-medium text-[#181715]">{activeCategory}</span>
               <span aria-hidden="true">·</span>
               <span className="tabular-nums">
-                {filteredArtworks.length}{' '}
-                {filteredArtworks.length === 1 ? 'Work' : 'Works'}
+                {isGalleryReady
+                  ? `${filteredArtworks.length} ${
+                      filteredArtworks.length === 1 ? 'Work' : 'Works'
+                    }`
+                  : 'Loading curation…'}
               </span>
             </div>
 
@@ -313,6 +365,7 @@ export default function App() {
             artworks={filteredArtworks}
             desktopColumns={desktopColumns}
             showCaptions={showCaptions}
+            isLoading={!isGalleryReady}
             onSelectArtwork={handleSelectArtwork}
           />
         </section>

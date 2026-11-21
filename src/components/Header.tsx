@@ -60,35 +60,37 @@ export function Header({
           <span>{brandName}</span>
         </a>
 
-        <nav
-          aria-label="Gallery categories"
-          className="hidden md:flex items-center gap-7 overflow-x-auto no-scrollbar"
-        >
-          {allCategories.map((category) => {
-            const isActive = activeCategory === category;
-            return (
-              <button
-                key={category}
-                type="button"
-                onClick={() => onSelectCategory(category)}
-                aria-pressed={isActive}
-                className={`relative min-h-[44px] px-1 text-[13px] tracking-wide transition-colors duration-200 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] rounded-sm ${
-                  isActive
-                    ? 'text-[#181715] font-medium'
-                    : 'text-[#64615B] hover:text-[#181715]'
-                }`}
-              >
-                {category}
-                <span
-                  aria-hidden="true"
-                  className={`absolute left-0 right-0 bottom-2.5 h-[1.5px] bg-[#181715] transition-all duration-200 origin-center ${
-                    isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'
+        {categories.length > 0 && (
+          <nav
+            aria-label="Gallery categories"
+            className="hidden md:flex items-center gap-7 overflow-x-auto no-scrollbar"
+          >
+            {allCategories.map((category) => {
+              const isActive = activeCategory === category;
+              return (
+                <button
+                  key={category}
+                  type="button"
+                  onClick={() => onSelectCategory(category)}
+                  aria-pressed={isActive}
+                  className={`relative min-h-[44px] px-1 text-[13px] tracking-wide transition-colors duration-200 whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] rounded-sm ${
+                    isActive
+                      ? 'text-[#181715] font-medium'
+                      : 'text-[#64615B] hover:text-[#181715]'
                   }`}
-                />
-              </button>
-            );
-          })}
-        </nav>
+                >
+                  {category}
+                  <span
+                    aria-hidden="true"
+                    className={`absolute left-0 right-0 bottom-2.5 h-[1.5px] bg-[#181715] transition-all duration-200 origin-center ${
+                      isActive ? 'opacity-100 scale-x-100' : 'opacity-0 scale-x-50'
+                    }`}
+                  />
+                </button>
+              );
+            })}
+          </nav>
+        )}
 
         <button
           type="button"
