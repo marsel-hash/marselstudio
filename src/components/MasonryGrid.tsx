@@ -115,10 +115,28 @@ function ArtworkTile({
       style={{
         animationDelay: `${Math.min(plateNumber - 1, 6) * 35}ms`,
       }}
-      className="animate-gallery-plate group relative block w-full text-left bg-[#FDFCF9] p-2 sm:p-2.5 border border-[#181715]/[0.08] rounded-[3px] transition-[border-color,box-shadow,transform] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#181715]/[0.22] hover:shadow-[0_18px_40px_-16px_rgba(24,23,21,0.12)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] focus-visible:ring-offset-2 focus-visible:ring-offset-[#F7F5F0] active:scale-[0.99]"
+      className="animate-gallery-plate group relative block w-full text-left bg-[#F8F3E6] p-3 sm:p-3.5 border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2] active:translate-y-0"
     >
+      {/* Vintage Album Corner Mounting Ticks */}
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-1.5 left-1.5 w-2 h-2 border-b border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+      />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none absolute bottom-1.5 right-1.5 w-2 h-2 border-b border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+      />
+
       <figure
-        className="relative w-full m-0 overflow-hidden bg-[#EFECE4]"
+        className="relative w-full m-0 overflow-hidden bg-[#E3D7BE] ring-1 ring-inset ring-[#221B15]/15"
         style={{
           aspectRatio: `${artwork.widthRatio} / ${artwork.heightRatio}`,
           backgroundImage: `linear-gradient(155deg, ${artwork.placeholderFrom} 0%, ${artwork.placeholderTo} 100%)`,
@@ -126,7 +144,7 @@ function ArtworkTile({
       >
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 bg-[#FDFCF9]/15 transition-opacity duration-300 ease-out ${
+          className={`pointer-events-none absolute inset-0 bg-[#F8F3E6]/15 transition-opacity duration-300 ease-out ${
             loaded || hasError ? 'opacity-0' : 'opacity-100'
           }`}
         />
@@ -150,20 +168,20 @@ function ArtworkTile({
             />
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#EFECE4] text-[#64615B]">
+          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#E3D7BE] text-[#635443]">
             <ImageOff className="w-5 h-5 mb-2 opacity-60" aria-hidden="true" />
-            <span className="font-serif-editorial text-sm text-[#181715]">
+            <span className="font-serif-editorial text-sm text-[#221B15]">
               {artwork.title}
             </span>
           </div>
         )}
 
         {!showCaptions && (
-          <figcaption className="hidden md:flex flex-col justify-end p-4 absolute inset-0 bg-gradient-to-t from-[#181715]/80 via-[#181715]/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-            <span className="font-serif-editorial text-lg font-medium leading-snug text-[#FDFCF9]">
+          <figcaption className="hidden md:flex flex-col justify-end p-4 absolute inset-0 bg-gradient-to-t from-[#221B15]/85 via-[#221B15]/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            <span className="font-serif-editorial text-lg font-medium leading-snug text-[#F8F3E6]">
               {artwork.title}
             </span>
-            <span className="text-[12px] text-[#FDFCF9]/80 mt-0.5 tabular-nums">
+            <span className="font-mono-retro text-[11px] text-[#E3D7BE] mt-0.5 tabular-nums">
               {artwork.year} · {artwork.category}
             </span>
           </figcaption>
@@ -171,19 +189,19 @@ function ArtworkTile({
       </figure>
 
       {showCaptions && (
-        <div className="pt-2.5 pb-0.5 px-0.5 flex items-baseline justify-between gap-2.5">
+        <div className="pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-2.5 border-t border-[#221B15]/10 mt-2.5">
           <div className="min-w-0">
-            <p className="font-serif-editorial text-[16px] sm:text-[18px] font-medium leading-snug text-[#181715] truncate group-hover:text-[#6E583B] transition-colors duration-200">
+            <p className="font-serif-editorial text-[16px] sm:text-[18px] font-semibold leading-snug text-[#221B15] truncate group-hover:text-[#B84A27] transition-colors duration-200">
               {artwork.title}
             </p>
-            <p className="text-[11px] text-[#64615B] truncate mt-0.5">
+            <p className="font-mono-retro text-[11px] text-[#635443] truncate mt-0.5">
               {artwork.category}
               <span aria-hidden="true"> · </span>
               <span className="tabular-nums">{artwork.year}</span>
             </p>
           </div>
-          <span className="text-[11px] text-[#7D7972] tabular-nums shrink-0">
-            No. {formattedPlate}
+          <span className="font-mono-retro text-[11px] uppercase tracking-wider text-[#B84A27] tabular-nums shrink-0">
+            ▸ No. {formattedPlate}
           </span>
         </div>
       )}
@@ -235,16 +253,16 @@ export function MasonryGrid({
         {Array.from({ length: columnCount }).map((_, idx) => (
           <div
             key={idx}
-            className="bg-[#FDFCF9] p-2 sm:p-2.5 border border-[#181715]/[0.08] rounded-[3px]"
+            className="bg-[#F8F3E6] p-2.5 sm:p-3 border border-[#221B15]/20 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.08)]"
           >
             <div
-              className="w-full bg-[#EFECE4] animate-pulse"
+              className="w-full bg-[#E3D7BE] animate-pulse"
               style={{ aspectRatio: skeletonRatios[idx % skeletonRatios.length] }}
             />
             {showCaptions && (
-              <div className="pt-2.5 pb-1 px-0.5 space-y-2">
-                <div className="h-4 w-2/3 bg-[#EFECE4] rounded-[2px] animate-pulse" />
-                <div className="h-3 w-1/3 bg-[#EFECE4] rounded-[2px] animate-pulse" />
+              <div className="pt-3 pb-1 px-0.5 space-y-2 border-t border-[#221B15]/10 mt-2.5">
+                <div className="h-4 w-2/3 bg-[#E3D7BE] rounded-[2px] animate-pulse" />
+                <div className="h-3 w-1/3 bg-[#E3D7BE] rounded-[2px] animate-pulse" />
               </div>
             )}
           </div>
@@ -256,7 +274,7 @@ export function MasonryGrid({
   if (artworks.length === 0) {
     return (
       <div className="py-20 text-center">
-        <p className="font-serif-editorial text-xl text-[#141413]">
+        <p className="font-serif-editorial text-xl text-[#221B15]">
           No artworks in this category yet.
         </p>
       </div>

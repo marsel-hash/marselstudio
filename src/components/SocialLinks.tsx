@@ -146,8 +146,8 @@ export function SocialLinks({ config, variant = 'footer' }: SocialLinksProps) {
 
   if (variant === 'modal') {
     return (
-      <div className="mt-5 pt-4 border-t border-[#181715]/[0.08]">
-        <p className="text-[11px] uppercase tracking-wider text-[#64615B] mb-2.5">
+      <div className="mt-5 pt-4 border-t border-[#221B15]/15">
+        <p className="font-mono-retro text-[11px] uppercase tracking-[0.12em] text-[#635443] mb-2.5">
           Connect
         </p>
         <div className="flex flex-wrap items-center gap-2">
@@ -158,7 +158,7 @@ export function SocialLinks({ config, variant = 'footer' }: SocialLinksProps) {
               target={item.external ? '_blank' : undefined}
               rel={item.external ? 'noopener noreferrer' : undefined}
               aria-label={item.label}
-              className="min-h-[38px] px-3 py-1.5 inline-flex items-center gap-2 text-[12px] text-[#4E4B46] hover:text-[#181715] border border-[#181715]/[0.1] hover:border-[#181715]/25 rounded-md transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715]"
+              className="min-h-[38px] px-3 py-1.5 inline-flex items-center gap-2 font-mono-retro text-[12px] text-[#221B15] hover:text-[#B84A27] bg-[#EFE6D2]/60 border border-[#221B15]/25 hover:border-[#B84A27] rounded-[2px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27]"
             >
               {item.icon}
               <span>{item.label}</span>
@@ -182,7 +182,7 @@ export function SocialLinks({ config, variant = 'footer' }: SocialLinksProps) {
           rel={item.external ? 'noopener noreferrer' : undefined}
           aria-label={item.label}
           title={item.label}
-          className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center text-[#64615B] hover:text-[#181715] transition-colors rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715]"
+          className="min-h-[40px] min-w-[40px] inline-flex items-center justify-center text-[#635443] hover:text-[#B84A27] transition-colors rounded-[2px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27]"
         >
           {item.icon}
         </a>

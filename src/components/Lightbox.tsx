@@ -169,23 +169,23 @@ export function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label={`Artwork details: ${artwork.title}`}
-      className="fixed inset-0 z-50 bg-[#F7F5F0]/[0.98] backdrop-blur-sm flex flex-col justify-between select-none"
+      className="fixed inset-0 z-50 bg-[#EFE6D2]/[0.98] backdrop-blur-sm flex flex-col justify-between select-none"
       style={{
         opacity: Math.max(0.45, 1 - dragOffsetY / 360),
         transition: isDragging ? 'none' : 'opacity 180ms ease-out',
       }}
     >
       {/* Top Bar */}
-      <div className="h-14 px-4 sm:px-8 flex items-center justify-between shrink-0">
-        <span className="text-[13px] text-[#64615B] tabular-nums tracking-wide">
-          {formattedIndex} / {formattedTotal}
+      <div className="h-14 px-4 sm:px-8 flex items-center justify-between shrink-0 border-b border-[#221B15]/15">
+        <span className="font-mono-retro text-[12px] text-[#635443] tabular-nums tracking-[0.12em]">
+          FRAME {formattedIndex} / {formattedTotal}
         </span>
 
         <button
           type="button"
           onClick={onClose}
           aria-label="Close full screen view"
-          className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center gap-1.5 px-2 text-[13px] text-[#181715] hover:text-[#64615B] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] rounded-sm"
+          className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center gap-1.5 px-2.5 font-mono-retro text-[12px] uppercase tracking-[0.08em] text-[#221B15] hover:text-[#B84A27] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
         >
           <span className="hidden sm:inline">Close</span>
           <X className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
@@ -204,9 +204,9 @@ export function Lightbox({
             type="button"
             onClick={goPrev}
             aria-label="Previous photo"
-            className="hidden sm:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#6B6A65] hover:text-[#141413] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#141413] rounded-full"
+            className="hidden sm:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/80 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
           >
-            <ChevronLeft className="w-6 h-6" strokeWidth={1.5} aria-hidden="true" />
+            <ChevronLeft className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
           </button>
         )}
 
@@ -220,7 +220,7 @@ export function Lightbox({
           }}
         >
           {!imgError ? (
-            <div className="p-2 sm:p-3 bg-[#FDFCF9] border border-[#181715]/[0.08] shadow-[0_24px_60px_-20px_rgba(24,23,21,0.14)] rounded-[2px]">
+            <div className="p-2.5 sm:p-3.5 bg-[#F8F3E6] border border-[#221B15]/25 shadow-[6px_6px_0px_rgba(34,27,21,0.16)] rounded-[2px]">
               <img
                 ref={imgRef}
                 key={artwork.id}
@@ -234,15 +234,15 @@ export function Lightbox({
                   setIsCurrentReady(true);
                 }}
                 onError={() => setImgError(true)}
-                className={`max-h-[55dvh] sm:max-h-[68dvh] w-auto max-w-full object-contain transition-opacity duration-200 ${
+                className={`max-h-[55dvh] sm:max-h-[68dvh] w-auto max-w-full object-contain ring-1 ring-inset ring-[#221B15]/15 transition-opacity duration-200 ${
                   isCurrentReady ? 'opacity-100' : 'opacity-95'
                 }`}
               />
             </div>
           ) : (
-            <div className="w-72 h-72 flex flex-col items-center justify-center bg-[#EFECE4] text-[#64615B] p-6 text-center">
+            <div className="w-72 h-72 flex flex-col items-center justify-center bg-[#E3D7BE] border border-[#221B15]/25 text-[#635443] p-6 text-center rounded-[2px]">
               <ImageOff className="w-6 h-6 mb-2 opacity-60" aria-hidden="true" />
-              <span className="font-serif-editorial text-lg text-[#181715]">
+              <span className="font-serif-editorial text-lg text-[#221B15]">
                 {artwork.title}
               </span>
             </div>
@@ -254,9 +254,9 @@ export function Lightbox({
             type="button"
             onClick={goNext}
             aria-label="Next photo"
-            className="hidden sm:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#64615B] hover:text-[#181715] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#181715] rounded-full"
+            className="hidden sm:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/80 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
           >
-            <ChevronRight className="w-6 h-6" strokeWidth={1.5} aria-hidden="true" />
+            <ChevronRight className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
           </button>
         )}
       </div>
@@ -264,40 +264,40 @@ export function Lightbox({
       {/* Caption & Thumb-Friendly Mobile Controls */}
       <div className="px-5 sm:px-8 pt-2 pb-5 sm:pb-8 shrink-0">
         <div className="max-w-xl mx-auto text-center">
-          <h2 className="font-serif-editorial text-2xl sm:text-[28px] font-medium leading-tight text-[#181715] text-balance">
+          <h2 className="font-serif-editorial text-2xl sm:text-[28px] font-semibold leading-tight text-[#221B15] text-balance">
             {artwork.title}
           </h2>
-          <p className="mt-1.5 text-[12px] sm:text-[13px] text-[#64615B] tracking-wide">
-            <span className="tabular-nums">{artwork.year}</span>
+          <p className="mt-1.5 font-mono-retro text-[11px] sm:text-[12px] text-[#635443] tracking-wide">
+            <span className="tabular-nums text-[#B84A27]">{artwork.year}</span>
             <span aria-hidden="true"> · </span>
             <span>{artwork.category}</span>
             <span aria-hidden="true"> · </span>
             <span>{artwork.medium}</span>
           </p>
           {artwork.caption && (
-            <p className="mt-2.5 text-[13px] sm:text-sm leading-relaxed text-[#4E4B46]">
+            <p className="mt-2.5 text-[13px] sm:text-sm leading-relaxed text-[#4D4135]">
               {artwork.caption}
             </p>
           )}
         </div>
 
         {artworks.length > 1 && (
-          <div className="sm:hidden mt-4 pt-3 border-t border-black/[0.06] flex items-center justify-between gap-4">
+          <div className="sm:hidden mt-4 pt-3 border-t border-[#221B15]/15 flex items-center justify-between gap-4">
             <button
               type="button"
               onClick={goPrev}
-              className="min-h-[44px] px-3 -ml-3 flex items-center gap-1.5 text-[13px] font-medium text-[#141413] active:opacity-60 transition-opacity"
+              className="min-h-[44px] px-3 -ml-3 flex items-center gap-1.5 font-mono-retro text-[12px] uppercase tracking-wider text-[#221B15] active:text-[#B84A27] transition-colors"
             >
               <ChevronLeft className="w-4 h-4" strokeWidth={1.6} aria-hidden="true" />
               <span>Previous</span>
             </button>
 
-            <span className="text-[11px] text-[#6B6A65]">Swipe photo</span>
+            <span className="font-mono-retro text-[11px] text-[#635443]">Swipe</span>
 
             <button
               type="button"
               onClick={goNext}
-              className="min-h-[44px] px-3 -mr-3 flex items-center gap-1.5 text-[13px] font-medium text-[#141413] active:opacity-60 transition-opacity"
+              className="min-h-[44px] px-3 -mr-3 flex items-center gap-1.5 font-mono-retro text-[12px] uppercase tracking-wider text-[#221B15] active:text-[#B84A27] transition-colors"
             >
               <span>Next</span>
               <ChevronRight className="w-4 h-4" strokeWidth={1.6} aria-hidden="true" />

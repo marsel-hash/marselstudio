@@ -2,15 +2,16 @@
 
 @layer base {
   :root {
-    --font-serif: 'Cormorant Garamond', Georgia, serif;
+    --font-serif: 'Fraunces', Georgia, serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
-    --bg-canvas: #F7F5F0;
-    --bg-paper: #FDFCF9;
-    --bg-mat: #EFECE4;
-    --bg-surface: #EFECE4;
-    --ink-primary: #181715;
-    --ink-muted: #64615B;
-    --accent-warm: #6E583B;
+    --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+    --bg-canvas: #EFE6D2;
+    --bg-paper: #F8F3E6;
+    --bg-mat: #E3D7BE;
+    --bg-surface: #E3D7BE;
+    --ink-primary: #221B15;
+    --ink-muted: #635443;
+    --accent-retro: #B84A27;
   }
 
   html {
@@ -24,6 +25,11 @@
 
   body {
     background-color: var(--bg-canvas);
+    background-image:
+      radial-gradient(ellipse at top center, rgba(248, 243, 230, 0.55) 0%, transparent 65%),
+      radial-gradient(ellipse at bottom center, rgba(196, 178, 145, 0.28) 0%, transparent 70%),
+      radial-gradient(rgba(34, 27, 21, 0.065) 0.75px, transparent 0.75px);
+    background-size: 100% 100%, 100% 100%, 12px 12px;
     color: var(--ink-primary);
     margin: 0;
     min-height: 100dvh;
@@ -31,13 +37,29 @@
   }
 
   ::selection {
-    background-color: #181715;
-    color: #FDFCF9;
+    background-color: #B84A27;
+    color: #F8F3E6;
   }
 }
 
 .font-serif-editorial {
   font-family: var(--font-serif);
+}
+
+.font-mono-retro {
+  font-family: var(--font-mono);
+}
+
+.film-sprockets {
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0px,
+    transparent 10px,
+    #EFE6D2 10px,
+    #EFE6D2 19px,
+    transparent 19px,
+    transparent 28px
+  );
 }
 
 @keyframes galleryFadeUp {
