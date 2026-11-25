@@ -95,36 +95,46 @@ function createPlaqueTexture(
   maxAnisotropy: number
 ): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 128;
+  canvas.width = 1024;
+  canvas.height = 256;
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.fillStyle = '#f8f3e6';
-    ctx.fillRect(0, 0, 512, 128);
+    ctx.fillRect(0, 0, 1024, 256);
 
     ctx.strokeStyle = 'rgba(34, 27, 21, 0.28)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(4, 4, 504, 120);
+    ctx.lineWidth = 6;
+    ctx.strokeRect(8, 8, 1008, 240);
 
     ctx.fillStyle = '#b84a27';
-    ctx.font = 'bold 20px "IBM Plex Mono", monospace';
+    ctx.font = '600 40px "IBM Plex Mono", monospace';
     ctx.fillText(
       `NO. ${String(plateNumber).padStart(2, '0')} · ${artwork.category.toUpperCase()} · ${artwork.year}`,
-      24,
-      44
+      48,
+      90
     );
 
+    ctx.strokeStyle = 'rgba(34, 27, 21, 0.14)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(48, 114);
+    ctx.lineTo(976, 114);
+    ctx.stroke();
+
     ctx.fillStyle = '#221b15';
-    ctx.font = 'bold 29px Georgia, serif';
+    ctx.font = '600 60px Georgia, serif';
     const titleText =
       artwork.title.length > 26
         ? `${artwork.title.slice(0, 25)}…`
         : artwork.title;
-    ctx.fillText(titleText, 24, 92);
+    ctx.fillText(titleText, 48, 188);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = maxAnisotropy;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
+  tex.magFilter = THREE.LinearFilter;
   return tex;
 }
 
@@ -199,9 +209,7 @@ export function Exhibition3D({
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.setPixelRatio(
-      isSoftwareGl
-        ? 1
-        : Math.min(window.devicePixelRatio || 1, isMobilePerf ? 1.5 : 2)
+      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
     );
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = !isSoftwareGl;
@@ -281,7 +289,7 @@ export function Exhibition3D({
     scene.add(rimLight);
 
     const maxAnisotropy = isMobilePerf
-      ? Math.min(4, renderer.capabilities.getMaxAnisotropy())
+      ? Math.min(8, renderer.capabilities.getMaxAnisotropy())
       : renderer.capabilities.getMaxAnisotropy();
     const shadowTex = createContactShadowTexture();
     const textureLoader = new THREE.TextureLoader();
@@ -504,15 +512,15 @@ export function Exhibition3D({
       group.add(photoMesh);
 
       const plaqueBack = new THREE.Mesh(
-        new THREE.BoxGeometry(0.88, 0.24, 0.022),
+        new THREE.BoxGeometry(1.04, 0.28, 0.022),
         darkWalnutMat
       );
-      plaqueBack.position.set(0, frameBottomY - 0.16, 0.004);
+      plaqueBack.position.set(0, frameBottomY - 0.17, 0.004);
       group.add(plaqueBack);
 
       const plaqueTex = createPlaqueTexture(artwork, index + 1, maxAnisotropy);
       const plaqueMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.84, 0.21),
+        new THREE.PlaneGeometry(1.0, 0.25),
         new THREE.MeshStandardMaterial({
           map: plaqueTex,
           roughness: 0.72,
@@ -522,7 +530,7 @@ export function Exhibition3D({
           polygonOffsetUnits: -1,
         })
       );
-      plaqueMesh.position.set(0, frameBottomY - 0.16, 0.018);
+      plaqueMesh.position.set(0, frameBottomY - 0.17, 0.018);
       group.add(plaqueMesh);
 
       const frameItem: CarouselFrameItem = {
@@ -545,6 +553,9 @@ export function Exhibition3D({
           }
           loadedTex.colorSpace = THREE.SRGBColorSpace;
           loadedTex.anisotropy = maxAnisotropy;
+          loadedTex.generateMipmaps = true;
+          loadedTex.minFilter = THREE.LinearMipmapLinearFilter;
+          loadedTex.magFilter = THREE.LinearFilter;
           photoMat.map = loadedTex;
           photoMat.needsUpdate = true;
           fallbackTex.dispose();
@@ -629,8 +640,8 @@ export function Exhibition3D({
                 -0.02
               );
 
-              plaqueBack.position.y = frameBottomY - 0.16;
-              plaqueMesh.position.y = frameBottomY - 0.16;
+              plaqueBack.position.y = frameBottomY - 0.17;
+              plaqueMesh.position.y = frameBottomY - 0.17;
 
               frameItem.camZAdjust = metrics.camZAdjust;
               frameItem.lookYAdjust = metrics.lookYAdjust;
@@ -654,10 +665,9 @@ export function Exhibition3D({
       renderer.compile(scene, camera);
 
       const pixelRatio = renderer.getPixelRatio();
-      const msaaSamples =
-        !isMobilePerf && renderer.capabilities.isWebGL2
-          ? Math.min(4, renderer.capabilities.maxSamples)
-          : 0;
+      const msaaSamples = renderer.capabilities.isWebGL2
+        ? Math.min(isMobilePerf ? 2 : 4, renderer.capabilities.maxSamples)
+        : 0;
       const msaaTarget = new THREE.WebGLRenderTarget(
         Math.max(1, Math.floor(width * pixelRatio)),
         Math.max(1, Math.floor(height * pixelRatio)),
@@ -675,10 +685,10 @@ export function Exhibition3D({
 
       dofPass = new SubtleDepthOfFieldPass(scene, camera, {
         focus: _camCurrentPos.z - 0.04,
-        focusDeadZone: isMobilePerf ? 0.68 : 0.56,
+        focusDeadZone: isMobilePerf ? 0.72 : 0.56,
         blurRange: 2.5,
         maxBlur: width < 640 ? 0.0038 : 0.0052,
-        samples: isMobilePerf ? 8 : 14,
+        samples: isMobilePerf ? 6 : 14,
         depthScale: isMobilePerf ? 0.35 : 0.5,
         depthHiddenObjects,
       });
