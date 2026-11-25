@@ -1,7 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Keyboard, Mousewheel } from 'swiper/modules';
+import type { Swiper as SwiperInstance } from 'swiper';
+import 'swiper/css';
 import {
   ChevronDown,
   ChevronLeft,
@@ -9,15 +15,14 @@ import {
   ChevronUp,
   Expand,
   LayoutGrid,
-  RotateCcw,
 } from 'lucide-react';
 import type { Artwork } from '../types/gallery';
+import { SubtleDepthOfFieldPass } from '../utils/depthOfFieldPass';
 import {
   createContactShadowTexture,
   detectSoftwareWebGL,
   disposeObject3D,
 } from '../utils/webglHelpers';
-import { buildVintageCameraAssembly } from '../utils/cameraModel3D';
 
 interface Exhibition3DProps {
   artworks: Artwork[];
@@ -31,17 +36,24 @@ interface Exhibition3DProps {
   onExit3D: () => void;
 }
 
-interface FrameTarget {
+interface CarouselFrameItem {
   artwork: Artwork;
   index: number;
-  centerX: number;
-  focusCamPos: THREE.Vector3;
-  focusLookAt: THREE.Vector3;
-  frameAccentMat: THREE.MeshStandardMaterial;
+  group: THREE.Group;
+  accentMat: THREE.MeshStandardMaterial;
+  clickTargets: THREE.Object3D[];
+  camZAdjust: number;
+  lookYAdjust: number;
 }
 
-const _camGoal = new THREE.Vector3();
-const _targetGoal = new THREE.Vector3();
+const _camTargetPos = new THREE.Vector3();
+const _camCurrentPos = new THREE.Vector3();
+const _lookTarget = new THREE.Vector3();
+const _lookCurrent = new THREE.Vector3();
+const _colorFocused = new THREE.Color(0xb84a27);
+const _colorIdle = new THREE.Color(0x9f7e48);
+const _emissiveFocused = new THREE.Color(0x3b1206);
+const _emissiveIdle = new THREE.Color(0x000000);
 
 function createFallbackArtworkTexture(
   artwork: Artwork,
@@ -116,51 +128,6 @@ function createPlaqueTexture(
   return tex;
 }
 
-function createArchivePlaqueTexture(maxAnisotropy: number): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 384;
-  canvas.height = 96;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    ctx.fillStyle = '#f8f3e6';
-    ctx.fillRect(0, 0, 384, 96);
-
-    ctx.strokeStyle = 'rgba(34, 27, 21, 0.28)';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(4, 4, 376, 88);
-
-    ctx.fillStyle = '#b84a27';
-    ctx.font = 'bold 17px "IBM Plex Mono", monospace';
-    ctx.fillText('ANALOG ARCHIVE · 35MM', 20, 34);
-
-    ctx.fillStyle = '#221b15';
-    ctx.font = 'bold 23px Georgia, serif';
-    ctx.fillText('Rangefinder & Film', 20, 70);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  tex.anisotropy = maxAnisotropy;
-  return tex;
-}
-
-function createWallWashTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 256;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    const grad = ctx.createRadialGradient(128, 96, 12, 128, 128, 124);
-    grad.addColorStop(0, 'rgba(255, 244, 214, 0.72)');
-    grad.addColorStop(0.55, 'rgba(255, 238, 200, 0.26)');
-    grad.addColorStop(1, 'rgba(255, 238, 200, 0)');
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 256, 256);
-  }
-  const tex = new THREE.CanvasTexture(canvas);
-  tex.colorSpace = THREE.SRGBColorSpace;
-  return tex;
-}
-
 export function Exhibition3D({
   artworks,
   isLoading = false,
@@ -173,30 +140,35 @@ export function Exhibition3D({
   onExit3D,
 }: Exhibition3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const [focusedIndex, setFocusedIndex] = useState(0);
+  const swiperRef = useRef<SwiperInstance | null>(null);
+
+  const [activeIndex, setActiveIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-  const [hoveredCameraProp, setHoveredCameraProp] = useState(false);
   const [isDockCollapsed, setIsDockCollapsed] = useState(false);
   const [webglUnsupported, setWebglUnsupported] = useState(false);
 
-  const focusedIndexRef = useRef(0);
+  const activeIndexRef = useRef(0);
   const hoveredIndexRef = useRef<number | null>(null);
-  const hoveredCameraRef = useRef(false);
+  const targetOffsetRef = useRef(0);
+  const isTouchingRef = useRef(false);
   const artworksRef = useRef(artworks);
   artworksRef.current = artworks;
-
-  const isModalOpenRef = useRef(isModalOpen);
-  isModalOpenRef.current = isModalOpen;
 
   const onSelectRef = useRef(onSelectArtwork);
   onSelectRef.current = onSelectArtwork;
 
-  const focusTriggerRef = useRef<((idx: number) => void) | null>(null);
-  const resetTriggerRef = useRef<(() => void) | null>(null);
+  // Imperative bridge to trigger WebGL render, raycast tap, and pointer hover
+  const requestRenderRef = useRef<(() => void) | null>(null);
+  const handleTapAtRef = useRef<((clientX: number, clientY: number) => void) | null>(null);
+  const handleHoverAtRef = useRef<((clientX: number, clientY: number) => void) | null>(null);
+  const handlePointerParallaxRef = useRef<((nx: number, ny: number) => void) | null>(null);
+  const handlePointerLeaveRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
-    setFocusedIndex(0);
-    focusedIndexRef.current = 0;
+    setActiveIndex(0);
+    activeIndexRef.current = 0;
+    targetOffsetRef.current = 0;
+    swiperRef.current?.slideTo(0, 0);
   }, [artworks]);
 
   useEffect(() => {
@@ -210,16 +182,20 @@ export function Exhibition3D({
       return;
     }
 
-    const width = Math.max(container.clientWidth, 320);
-    const height = Math.max(container.clientHeight, 460);
+    const prefersReducedMotion = window.matchMedia(
+      '(prefers-reduced-motion: reduce)'
+    ).matches;
+
+    let width = Math.max(container.clientWidth, 300);
+    let height = Math.max(container.clientHeight, 440);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
       powerPreference: 'high-performance',
     });
     renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.04;
+    renderer.toneMapping = THREE.NoToneMapping;
+    renderer.toneMappingExposure = 1.0;
     renderer.setPixelRatio(
       isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
     );
@@ -234,118 +210,64 @@ export function Exhibition3D({
     const scene = new THREE.Scene();
     const bgHex = 0xeae0ca;
     scene.background = new THREE.Color(bgHex);
-    scene.fog = new THREE.FogExp2(bgHex, 0.022);
+    scene.fog = new THREE.FogExp2(bgHex, 0.045);
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const roomEnv = new RoomEnvironment();
     const envTarget = pmremGenerator.fromScene(roomEnv, 0.04);
     scene.environment = envTarget.texture;
+    scene.environmentIntensity = 0.42;
     roomEnv.dispose();
     pmremGenerator.dispose();
 
-    // Compute exact non-overlapping horizontal layout for every artwork
-    const frameGap = 1.15;
-    const layoutMetrics = artworks.map((artwork) => {
-      const aspect = Math.max(
-        0.62,
-        Math.min(1.75, (artwork.widthRatio || 4) / (artwork.heightRatio || 3))
-      );
-      const photoHeight = aspect >= 1 ? 1.32 : 1.54;
-      const photoWidth = photoHeight * aspect;
-      const matWidth = photoWidth + 0.3;
-      const matHeight = photoHeight + 0.3;
-      const outerWidth = matWidth + 0.12;
-      const outerHeight = matHeight + 0.12;
-      return {
-        artwork,
-        photoWidth,
-        photoHeight,
-        matWidth,
-        matHeight,
-        outerWidth,
-        outerHeight,
-      };
-    });
+    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 60);
 
-    const totalFramesSpan =
-      layoutMetrics.reduce((acc, m) => acc + m.outerWidth, 0) +
-      frameGap * Math.max(0, layoutMetrics.length - 1);
+    const getResponsiveCamBase = (w: number, h: number) => {
+      const aspect = w / h;
+      const baseZ = aspect < 0.72 ? 4.85 : aspect < 1.0 ? 4.25 : 3.72;
+      const baseY = aspect < 0.8 ? 1.48 : 1.54;
+      const lookY = aspect < 0.8 ? 1.28 : 1.35;
+      return { baseZ, baseY, lookY, viewportAspect: aspect };
+    };
 
-    const aspectView = width / height;
-    const camera = new THREE.PerspectiveCamera(40, aspectView, 0.1, 80);
+    const initialCam = getResponsiveCamBase(width, height);
+    _camCurrentPos.set(0, initialCam.baseY, initialCam.baseZ);
+    _lookCurrent.set(0, initialCam.lookY, 0);
+    camera.position.copy(_camCurrentPos);
+    camera.lookAt(_lookCurrent);
 
-    // Frame overview cleanly: fit all works when <= 4, or comfortably frame opening gallery wing
-    const vFov = THREE.MathUtils.degToRad(camera.fov);
-    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspectView);
-    const initialSpanToShow =
-      artworks.length <= 4
-        ? Math.max(4.8, totalFramesSpan + 2.4)
-        : Math.max(6.8, layoutMetrics.slice(0, 3).reduce((a, m) => a + m.outerWidth, 0) + frameGap * 2 + 2.0);
-    const overviewZ = THREE.MathUtils.clamp(
-      (initialSpanToShow / 2 / Math.tan(hFov / 2)) * 1.1,
-      4.4,
-      9.4
-    );
-    const overviewX =
-      artworks.length <= 4
-        ? 0
-        : -totalFramesSpan / 2 +
-          (layoutMetrics[0].outerWidth +
-            layoutMetrics[1].outerWidth +
-            layoutMetrics[2].outerWidth) /
-            2 +
-          frameGap;
-
-    const defaultCamPos = new THREE.Vector3(overviewX, 1.85, overviewZ);
-    const defaultLookAt = new THREE.Vector3(overviewX, 1.58, 0);
-    camera.position.copy(defaultCamPos);
-
-    const controls = new OrbitControls(camera, renderer.domElement);
-    controls.target.copy(defaultLookAt);
-    controls.enableDamping = !isSoftwareGl;
-    controls.dampingFactor = 0.07;
-    controls.minDistance = 2.0;
-    controls.maxDistance = 12.5;
-    controls.minPolarAngle = Math.PI * 0.24;
-    controls.maxPolarAngle = Math.PI * 0.5;
-    controls.minAzimuthAngle = -Math.PI * 0.34;
-    controls.maxAzimuthAngle = Math.PI * 0.34;
-    controls.screenSpacePanning = true;
-    controls.update();
-
-    // 3-Point Warm Museum Studio Lighting
-    const hemiLight = new THREE.HemisphereLight(0xfff8eb, 0x735e47, 0.92);
+    // 3-Point Warm Gallery Studio Lighting (balanced for NoToneMapping + true-color prints)
+    const hemiLight = new THREE.HemisphereLight(0xfff8eb, 0x6f5b46, 0.48);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff2da, 1.95);
-    keyLight.position.set(4.0, 8.8, 7.5);
+    const keyLight = new THREE.DirectionalLight(0xfff1d6, 0.84);
+    keyLight.position.set(3.2, 6.8, 5.4);
     if (!isSoftwareGl) {
       keyLight.castShadow = true;
       keyLight.shadow.mapSize.set(1024, 1024);
-      keyLight.shadow.camera.near = 1;
-      keyLight.shadow.camera.far = 32;
-      keyLight.shadow.camera.left = -12;
-      keyLight.shadow.camera.right = 12;
-      keyLight.shadow.camera.top = 10;
-      keyLight.shadow.camera.bottom = -10;
+      keyLight.shadow.camera.near = 0.5;
+      keyLight.shadow.camera.far = 22;
+      keyLight.shadow.camera.left = -7;
+      keyLight.shadow.camera.right = 7;
+      keyLight.shadow.camera.top = 7;
+      keyLight.shadow.camera.bottom = -7;
       keyLight.shadow.bias = -0.0005;
       keyLight.shadow.normalBias = 0.02;
     }
     scene.add(keyLight);
 
-    const fillLight = new THREE.DirectionalLight(0xebd8bb, 0.72);
-    fillLight.position.set(-5.0, 4.2, 5.5);
-    scene.add(fillLight);
+    const rimLight = new THREE.DirectionalLight(0xebd8bc, 0.38);
+    rimLight.position.set(-4.2, 3.6, -4.5);
+    scene.add(rimLight);
 
     const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
     const shadowTex = createContactShadowTexture();
-    const wallWashTex = createWallWashTexture();
     const textureLoader = new THREE.TextureLoader();
     textureLoader.setCrossOrigin('anonymous');
 
-    // Museum Floor
+    // Grounded Warm Museum Floor + Inlaid Brass Center Stage Ring
     const floor = new THREE.Mesh(
-      new THREE.PlaneGeometry(72, 36),
+      new THREE.CircleGeometry(24, 64),
       new THREE.MeshStandardMaterial({
         color: 0xe3d7be,
         roughness: 0.92,
@@ -353,305 +275,247 @@ export function Exhibition3D({
       })
     );
     floor.rotation.x = -Math.PI / 2;
-    floor.position.set(0, 0, 8);
+    floor.position.y = 0;
     floor.receiveShadow = !isSoftwareGl;
     scene.add(floor);
 
-    // Architectural Exhibition Gallery Wall
-    const wallWidth = Math.max(14, totalFramesSpan + 9.0);
-    const wallHeight = 4.15;
-    const wallMesh = new THREE.Mesh(
-      new THREE.BoxGeometry(wallWidth, wallHeight, 0.24),
+    const stageRingOuter = new THREE.Mesh(
+      new THREE.RingGeometry(1.52, 1.56, 64),
       new THREE.MeshStandardMaterial({
-        color: 0xf4ecda,
-        roughness: 0.94,
-        metalness: 0.01,
+        color: 0x9f7e48,
+        roughness: 0.36,
+        metalness: 0.78,
+        polygonOffset: true,
+        polygonOffsetFactor: -1,
+        polygonOffsetUnits: -1,
       })
     );
-    wallMesh.position.set(0, wallHeight / 2, -0.14);
-    wallMesh.receiveShadow = !isSoftwareGl;
-    scene.add(wallMesh);
+    stageRingOuter.rotation.x = -Math.PI / 2;
+    stageRingOuter.position.set(0, 0.004, 0.08);
+    scene.add(stageRingOuter);
+
+    const stageSpotlightPool = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.1, 2.2),
+      new THREE.MeshBasicMaterial({
+        map: shadowTex,
+        transparent: true,
+        depthWrite: false,
+        opacity: 0.38,
+      })
+    );
+    stageSpotlightPool.rotation.x = -Math.PI / 2;
+    stageSpotlightPool.position.set(0, 0.003, 0.12);
+    scene.add(stageSpotlightPool);
+
+    const depthHiddenObjects: THREE.Object3D[] = [stageSpotlightPool];
 
     const darkWalnutMat = new THREE.MeshStandardMaterial({
       color: 0x261d16,
       roughness: 0.46,
       metalness: 0.12,
     });
-    const brassMat = new THREE.MeshStandardMaterial({
-      color: 0xa27e46,
-      roughness: 0.36,
-      metalness: 0.76,
-    });
     const matBoardMat = new THREE.MeshStandardMaterial({
       color: 0xf9f5eb,
       roughness: 0.88,
       metalness: 0.02,
     });
-    const pedestalMat = new THREE.MeshStandardMaterial({
+    const plinthStoneMat = new THREE.MeshStandardMaterial({
       color: 0xd6c7aa,
-      roughness: 0.82,
-      metalness: 0.05,
+      roughness: 0.84,
+      metalness: 0.04,
     });
-    const lampMetalMat = new THREE.MeshStandardMaterial({
-      color: 0x221b15,
-      roughness: 0.38,
-      metalness: 0.75,
-    });
-    const lampGlowMat = new THREE.MeshStandardMaterial({
-      color: 0xfff3d4,
-      emissive: 0xffd796,
-      emissiveIntensity: 1.4,
-      roughness: 0.2,
+    const stanchionMetalMat = new THREE.MeshStandardMaterial({
+      color: 0x1e1813,
+      roughness: 0.36,
+      metalness: 0.72,
     });
 
-    // Baseboard Molding + Picture Rail + Inlaid Brass Floor Line
-    const baseboard = new THREE.Mesh(
-      new THREE.BoxGeometry(wallWidth, 0.18, 0.04),
-      darkWalnutMat
-    );
-    baseboard.position.set(0, 0.09, 0.0);
-    scene.add(baseboard);
+    const stageGroup = new THREE.Group();
+    scene.add(stageGroup);
 
-    const pictureRail = new THREE.Mesh(
-      new THREE.BoxGeometry(wallWidth, 0.045, 0.04),
-      brassMat
-    );
-    pictureRail.position.set(0, 3.22, 0.0);
-    scene.add(pictureRail);
-
-    const floorBrassGuide = new THREE.Mesh(
-      new THREE.PlaneGeometry(wallWidth - 2.0, 0.04),
-      new THREE.MeshStandardMaterial({
-        color: 0x9f7e48,
-        roughness: 0.38,
-        metalness: 0.76,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
-      })
-    );
-    floorBrassGuide.rotation.x = -Math.PI / 2;
-    floorBrassGuide.position.set(0, 0.004, 1.35);
-    scene.add(floorBrassGuide);
-
-    // Overhead Suspended Lighting Track Bar
-    const trackLength = Math.max(6.5, totalFramesSpan + 2.2);
-    const trackBar = new THREE.Mesh(
-      new THREE.BoxGeometry(trackLength, 0.055, 0.06),
-      lampMetalMat
-    );
-    trackBar.position.set(0, 3.55, 0.92);
-    scene.add(trackBar);
-
-    // Low Walnut Museum Bench positioned well below frames in the foreground
-    const benchGroup = new THREE.Group();
-    benchGroup.position.set(overviewX, 0, 2.75);
-    scene.add(benchGroup);
-
-    const benchShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(2.35, 1.0),
-      new THREE.MeshBasicMaterial({
-        map: shadowTex,
-        transparent: true,
-        depthWrite: false,
-        opacity: 0.52,
-      })
-    );
-    benchShadow.rotation.x = -Math.PI / 2;
-    benchShadow.position.y = 0.004;
-    benchGroup.add(benchShadow);
-
-    const benchSeat = new THREE.Mesh(
-      new THREE.BoxGeometry(1.8, 0.07, 0.5),
-      darkWalnutMat
-    );
-    benchSeat.position.y = 0.39;
-    benchSeat.castShadow = !isSoftwareGl;
-    benchSeat.receiveShadow = !isSoftwareGl;
-    benchGroup.add(benchSeat);
-
-    const benchLegGeo = new THREE.BoxGeometry(0.08, 0.36, 0.42);
-    const leftBenchLeg = new THREE.Mesh(benchLegGeo, pedestalMat);
-    leftBenchLeg.position.set(-0.7, 0.18, 0);
-    leftBenchLeg.castShadow = !isSoftwareGl;
-    benchGroup.add(leftBenchLeg);
-
-    const rightBenchLeg = new THREE.Mesh(benchLegGeo, pedestalMat);
-    rightBenchLeg.position.set(0.7, 0.18, 0);
-    rightBenchLeg.castShadow = !isSoftwareGl;
-    benchGroup.add(rightBenchLeg);
-
-    // Curator's 3D Vintage 35mm Camera Plinth parked cleanly to the left wing (never blocks artworks)
-    const cameraPlinthGroup = new THREE.Group();
-    const plinthX = -totalFramesSpan / 2 - 1.95;
-    cameraPlinthGroup.position.set(plinthX, 0, 1.05);
-    cameraPlinthGroup.rotation.y = 0.38;
-    scene.add(cameraPlinthGroup);
-
-    const plinthShadow = new THREE.Mesh(
-      new THREE.PlaneGeometry(1.45, 1.45),
-      new THREE.MeshBasicMaterial({
-        map: shadowTex,
-        transparent: true,
-        depthWrite: false,
-        opacity: 0.65,
-      })
-    );
-    plinthShadow.rotation.x = -Math.PI / 2;
-    plinthShadow.position.y = 0.004;
-    cameraPlinthGroup.add(plinthShadow);
-
-    const camPedestal = new THREE.Mesh(
-      new THREE.BoxGeometry(0.76, 0.78, 0.76),
-      pedestalMat
-    );
-    camPedestal.position.y = 0.39;
-    camPedestal.castShadow = !isSoftwareGl;
-    camPedestal.receiveShadow = !isSoftwareGl;
-    cameraPlinthGroup.add(camPedestal);
-
-    const camPedestalTrim = new THREE.Mesh(
-      new THREE.BoxGeometry(0.8, 0.03, 0.8),
-      new THREE.MeshStandardMaterial({
-        color: 0xb84a27,
-        roughness: 0.36,
-        metalness: 0.52,
-      })
-    );
-    camPedestalTrim.position.y = 0.795;
-    cameraPlinthGroup.add(camPedestalTrim);
-
-    const archivePlaque = new THREE.Mesh(
-      new THREE.PlaneGeometry(0.64, 0.16),
-      new THREE.MeshStandardMaterial({
-        map: createArchivePlaqueTexture(maxAnisotropy),
-        roughness: 0.72,
-        metalness: 0.04,
-      })
-    );
-    archivePlaque.position.set(0, 0.58, 0.384);
-    cameraPlinthGroup.add(archivePlaque);
-
-    const camAssembly = buildVintageCameraAssembly(maxAnisotropy, isSoftwareGl);
-    camAssembly.root.scale.setScalar(0.35);
-    camAssembly.root.position.set(-0.04, 0.81, 0);
-    cameraPlinthGroup.add(camAssembly.root);
-
-    const camHitProxy = new THREE.Mesh(
-      new THREE.BoxGeometry(0.84, 0.55, 0.68),
-      new THREE.MeshBasicMaterial({ visible: false })
-    );
-    camHitProxy.position.set(0, 1.06, 0);
-    camHitProxy.layers.enable(1);
-    camHitProxy.userData.isCameraProp = true;
-    cameraPlinthGroup.add(camHitProxy);
-
-    // Gallery Wall Mounted Artworks (Eye-level shared datum y = 1.72, strictly non-overlapping X)
-    const framesGroup = new THREE.Group();
-    scene.add(framesGroup);
-
-    const frameTargets: FrameTarget[] = [];
-    const clickableMeshes: THREE.Object3D[] = [camHitProxy];
+    const frameItems: CarouselFrameItem[] = [];
+    let visibleClickableMeshes: THREE.Object3D[] = [];
     let disposed = false;
 
-    const eyeLevelY = 1.72;
-    let cursorX = -totalFramesSpan / 2;
+    const frameCenterY = 1.58;
 
-    layoutMetrics.forEach((m, index) => {
-      const centerX = cursorX + m.outerWidth / 2;
-      cursorX += m.outerWidth + frameGap;
+    const computeFrameMetrics = (rawAspect: number) => {
+      const safeAspect =
+        Number.isFinite(rawAspect) && rawAspect > 0.1
+          ? Math.max(0.4, Math.min(2.6, rawAspect))
+          : 4 / 3;
+      const maxW = 1.9;
+      const maxH = 1.44;
+      let photoWidth = maxH * safeAspect;
+      let photoHeight = maxH;
+      if (photoWidth > maxW) {
+        photoWidth = maxW;
+        photoHeight = maxW / safeAspect;
+      }
+      const matWidth = photoWidth + 0.22;
+      const matHeight = photoHeight + 0.22;
+      const outerWidth = matWidth + 0.11;
+      const outerHeight = matHeight + 0.11;
+      const camZAdjust =
+        safeAspect > 1.15
+          ? (safeAspect - 1.15) * 0.34
+          : safeAspect < 0.88
+            ? -0.1
+            : 0;
+      const lookYAdjust = safeAspect < 0.88 ? 0.03 : 0;
+      return {
+        safeAspect,
+        photoWidth,
+        photoHeight,
+        matWidth,
+        matHeight,
+        outerWidth,
+        outerHeight,
+        camZAdjust,
+        lookYAdjust,
+      };
+    };
 
-      const plateGroup = new THREE.Group();
-      plateGroup.position.set(centerX, 0, 0);
-      framesGroup.add(plateGroup);
+    artworks.forEach((artwork, index) => {
+      const initialAspect = (artwork.widthRatio || 4) / (artwork.heightRatio || 3);
+      let metrics = computeFrameMetrics(initialAspect);
 
-      // Subtle warm spotlight wash on the wall behind the print
-      const wallWash = new THREE.Mesh(
-        new THREE.PlaneGeometry(m.outerWidth + 1.15, m.outerHeight + 1.25),
+      const group = new THREE.Group();
+      stageGroup.add(group);
+
+      const contactShadow = new THREE.Mesh(
+        new THREE.PlaneGeometry(metrics.outerWidth + 0.65, 1.15),
         new THREE.MeshBasicMaterial({
-          map: wallWashTex,
+          map: shadowTex,
           transparent: true,
           depthWrite: false,
-          opacity: 0.62,
+          opacity: 0.68,
+        })
+      );
+      contactShadow.rotation.x = -Math.PI / 2;
+      contactShadow.position.y = 0.005;
+      group.add(contactShadow);
+      depthHiddenObjects.push(contactShadow);
+
+      const baseHeight = 0.14;
+      const plinthBase = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(1.05, metrics.outerWidth * 0.64),
+          baseHeight,
+          0.42
+        ),
+        plinthStoneMat
+      );
+      plinthBase.position.y = baseHeight / 2;
+      plinthBase.castShadow = !isSoftwareGl;
+      plinthBase.receiveShadow = !isSoftwareGl;
+      group.add(plinthBase);
+
+      const accentMat = new THREE.MeshStandardMaterial({
+        color: index === 0 ? 0xb84a27 : 0x9f7e48,
+        emissive: index === 0 ? 0x3b1206 : 0x000000,
+        roughness: 0.34,
+        metalness: 0.58,
+      });
+      const plinthTrim = new THREE.Mesh(
+        new THREE.BoxGeometry(
+          Math.max(1.09, metrics.outerWidth * 0.66),
+          0.028,
+          0.44
+        ),
+        accentMat
+      );
+      plinthTrim.position.y = baseHeight + 0.014;
+      group.add(plinthTrim);
+
+      let frameBottomY = frameCenterY - metrics.outerHeight / 2;
+      let stanchionHeight = Math.max(0.24, frameBottomY - baseHeight);
+      let sharedStanchionGeo = new THREE.CylinderGeometry(
+        0.022,
+        0.022,
+        stanchionHeight,
+        12
+      );
+      let stanchionX = Math.min(0.42, metrics.outerWidth * 0.24);
+
+      const leftPost = new THREE.Mesh(sharedStanchionGeo, stanchionMetalMat);
+      leftPost.position.set(-stanchionX, baseHeight + stanchionHeight / 2, -0.02);
+      leftPost.castShadow = !isSoftwareGl;
+      group.add(leftPost);
+
+      const rightPost = new THREE.Mesh(sharedStanchionGeo, stanchionMetalMat);
+      rightPost.position.set(stanchionX, baseHeight + stanchionHeight / 2, -0.02);
+      rightPost.castShadow = !isSoftwareGl;
+      group.add(rightPost);
+
+      const outerFrame = new THREE.Mesh(
+        new THREE.BoxGeometry(metrics.outerWidth, metrics.outerHeight, 0.08),
+        darkWalnutMat
+      );
+      outerFrame.position.set(0, frameCenterY, 0);
+      outerFrame.castShadow = !isSoftwareGl;
+      outerFrame.receiveShadow = !isSoftwareGl;
+      outerFrame.layers.enable(1);
+      outerFrame.userData.artworkIndex = index;
+      group.add(outerFrame);
+
+      const matBoard = new THREE.Mesh(
+        new THREE.BoxGeometry(metrics.matWidth, metrics.matHeight, 0.024),
+        matBoardMat
+      );
+      matBoard.position.set(0, frameCenterY, 0.036);
+      group.add(matBoard);
+
+      const fallbackTex = createFallbackArtworkTexture(artwork, maxAnisotropy);
+      const photoMat = new THREE.MeshBasicMaterial({
+        map: fallbackTex,
+        toneMapped: false,
+        fog: false,
+      });
+      const photoMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(metrics.photoWidth, metrics.photoHeight),
+        photoMat
+      );
+      photoMesh.position.set(0, frameCenterY, 0.052);
+      photoMesh.layers.enable(1);
+      photoMesh.userData.artworkIndex = index;
+      group.add(photoMesh);
+
+      const plaqueBack = new THREE.Mesh(
+        new THREE.BoxGeometry(0.88, 0.24, 0.022),
+        darkWalnutMat
+      );
+      plaqueBack.position.set(0, frameBottomY - 0.16, 0.004);
+      group.add(plaqueBack);
+
+      const plaqueTex = createPlaqueTexture(artwork, index + 1, maxAnisotropy);
+      const plaqueMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(0.84, 0.21),
+        new THREE.MeshStandardMaterial({
+          map: plaqueTex,
+          roughness: 0.72,
+          metalness: 0.04,
           polygonOffset: true,
           polygonOffsetFactor: -1,
           polygonOffsetUnits: -1,
         })
       );
-      wallWash.position.set(0, eyeLevelY + 0.05, -0.012);
-      plateGroup.add(wallWash);
+      plaqueMesh.position.set(0, frameBottomY - 0.16, 0.018);
+      group.add(plaqueMesh);
 
-      // Overhead Track Spotlight Head aimed at this print
-      const lampHousing = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.062, 0.082, 0.22, 18),
-        lampMetalMat
-      );
-      lampHousing.position.set(0, 3.43, 0.92);
-      lampHousing.rotation.x = 0.58;
-      plateGroup.add(lampHousing);
-
-      const lampLens = new THREE.Mesh(
-        new THREE.CircleGeometry(0.07, 16),
-        lampGlowMat
-      );
-      lampLens.position.set(0, 3.34, 0.86);
-      lampLens.rotation.x = Math.PI / 2 + 0.58;
-      plateGroup.add(lampLens);
-
-      // Outer Walnut Gallery Frame mounted flush to wall
-      const outerFrame = new THREE.Mesh(
-        new THREE.BoxGeometry(m.outerWidth, m.outerHeight, 0.075),
-        darkWalnutMat
-      );
-      outerFrame.position.set(0, eyeLevelY, 0.02);
-      outerFrame.castShadow = !isSoftwareGl;
-      outerFrame.receiveShadow = !isSoftwareGl;
-      outerFrame.layers.enable(1);
-      outerFrame.userData.artworkIndex = index;
-      plateGroup.add(outerFrame);
-      clickableMeshes.push(outerFrame);
-
-      // Subtle bottom terracotta/brass selection accent bar beneath frame
-      const frameAccentMat = new THREE.MeshStandardMaterial({
-        color: index === 0 ? 0xb84a27 : 0x9f7e48,
-        emissive: index === 0 ? 0x3b1206 : 0x000000,
-        roughness: 0.35,
-        metalness: 0.65,
-      });
-      const frameAccentBar = new THREE.Mesh(
-        new THREE.BoxGeometry(m.outerWidth * 0.45, 0.018, 0.082),
-        frameAccentMat
-      );
-      frameAccentBar.position.set(0, eyeLevelY - m.outerHeight / 2 - 0.025, 0.02);
-      plateGroup.add(frameAccentBar);
-
-      // Archival Cream Mat Board
-      const matBoard = new THREE.Mesh(
-        new THREE.BoxGeometry(m.matWidth, m.matHeight, 0.024),
-        matBoardMat
-      );
-      matBoard.position.set(0, eyeLevelY, 0.052);
-      plateGroup.add(matBoard);
-
-      // Photo Plane
-      const fallbackTex = createFallbackArtworkTexture(m.artwork, maxAnisotropy);
-      const photoMat = new THREE.MeshStandardMaterial({
-        map: fallbackTex,
-        roughness: 0.34,
-        metalness: 0.02,
-      });
-      const photoMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(m.photoWidth, m.photoHeight),
-        photoMat
-      );
-      photoMesh.position.set(0, eyeLevelY, 0.068);
-      photoMesh.layers.enable(1);
-      photoMesh.userData.artworkIndex = index;
-      plateGroup.add(photoMesh);
-      clickableMeshes.push(photoMesh);
+      const frameItem: CarouselFrameItem = {
+        artwork,
+        index,
+        group,
+        accentMat,
+        clickTargets: [outerFrame, photoMesh],
+        camZAdjust: metrics.camZAdjust,
+        lookYAdjust: metrics.lookYAdjust,
+      };
+      frameItems.push(frameItem);
 
       textureLoader.load(
-        m.artwork.src,
+        artwork.src,
         (loadedTex) => {
           if (disposed) {
             loadedTex.dispose();
@@ -662,6 +526,95 @@ export function Exhibition3D({
           photoMat.map = loadedTex;
           photoMat.needsUpdate = true;
           fallbackTex.dispose();
+
+          const img = loadedTex.image as
+            | {
+                naturalWidth?: number;
+                naturalHeight?: number;
+                width?: number;
+                height?: number;
+              }
+            | undefined;
+          const natW = img?.naturalWidth || img?.width || 0;
+          const natH = img?.naturalHeight || img?.height || 0;
+          if (natW > 0 && natH > 0) {
+            const naturalAspect = natW / natH;
+            if (Math.abs(naturalAspect - metrics.safeAspect) > 0.012) {
+              metrics = computeFrameMetrics(naturalAspect);
+
+              photoMesh.geometry.dispose();
+              photoMesh.geometry = new THREE.PlaneGeometry(
+                metrics.photoWidth,
+                metrics.photoHeight
+              );
+
+              matBoard.geometry.dispose();
+              matBoard.geometry = new THREE.BoxGeometry(
+                metrics.matWidth,
+                metrics.matHeight,
+                0.024
+              );
+
+              outerFrame.geometry.dispose();
+              outerFrame.geometry = new THREE.BoxGeometry(
+                metrics.outerWidth,
+                metrics.outerHeight,
+                0.08
+              );
+
+              plinthBase.geometry.dispose();
+              plinthBase.geometry = new THREE.BoxGeometry(
+                Math.max(1.05, metrics.outerWidth * 0.64),
+                baseHeight,
+                0.42
+              );
+
+              plinthTrim.geometry.dispose();
+              plinthTrim.geometry = new THREE.BoxGeometry(
+                Math.max(1.09, metrics.outerWidth * 0.66),
+                0.028,
+                0.44
+              );
+
+              contactShadow.geometry.dispose();
+              contactShadow.geometry = new THREE.PlaneGeometry(
+                metrics.outerWidth + 0.65,
+                1.15
+              );
+
+              frameBottomY = frameCenterY - metrics.outerHeight / 2;
+              stanchionHeight = Math.max(0.24, frameBottomY - baseHeight);
+              stanchionX = Math.min(0.42, metrics.outerWidth * 0.24);
+              const nextStanchionGeo = new THREE.CylinderGeometry(
+                0.022,
+                0.022,
+                stanchionHeight,
+                12
+              );
+              leftPost.geometry = nextStanchionGeo;
+              rightPost.geometry = nextStanchionGeo;
+              sharedStanchionGeo.dispose();
+              sharedStanchionGeo = nextStanchionGeo;
+
+              leftPost.position.set(
+                -stanchionX,
+                baseHeight + stanchionHeight / 2,
+                -0.02
+              );
+              rightPost.position.set(
+                stanchionX,
+                baseHeight + stanchionHeight / 2,
+                -0.02
+              );
+
+              plaqueBack.position.y = frameBottomY - 0.16;
+              plaqueMesh.position.y = frameBottomY - 0.16;
+
+              frameItem.camZAdjust = metrics.camZAdjust;
+              frameItem.lookYAdjust = metrics.lookYAdjust;
+            }
+          }
+
           requestRender();
         },
         undefined,
@@ -669,55 +622,126 @@ export function Exhibition3D({
           // Keep clean procedural canvas fallback on CORS/load failure
         }
       );
-
-      // Museum Wall Plaque directly beneath frame
-      const plaqueTex = createPlaqueTexture(m.artwork, index + 1, maxAnisotropy);
-      const plaqueMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(0.92, 0.23),
-        new THREE.MeshStandardMaterial({
-          map: plaqueTex,
-          roughness: 0.75,
-          metalness: 0.04,
-          polygonOffset: true,
-          polygonOffsetFactor: -1,
-          polygonOffsetUnits: -1,
-        })
-      );
-      plaqueMesh.position.set(0, eyeLevelY - m.outerHeight / 2 - 0.22, -0.005);
-      plateGroup.add(plaqueMesh);
-
-      // Ideal straight-on viewing distance scaled by print size
-      const focusDistance = Math.max(2.6, Math.max(m.outerWidth, m.outerHeight) * 1.48);
-      frameTargets.push({
-        artwork: m.artwork,
-        index,
-        centerX,
-        focusCamPos: new THREE.Vector3(centerX, eyeLevelY - 0.04, focusDistance),
-        focusLookAt: new THREE.Vector3(centerX, eyeLevelY - 0.06, 0.05),
-        frameAccentMat,
-      });
     });
+
+    let composer: EffectComposer | null = null;
+    let dofPass: SubtleDepthOfFieldPass | null = null;
+    let outputPass: OutputPass | null = null;
 
     if (!isSoftwareGl) {
       renderer.compile(scene, camera);
+
+      const pixelRatio = renderer.getPixelRatio();
+      const msaaSamples = renderer.capabilities.isWebGL2
+        ? Math.min(4, renderer.capabilities.maxSamples)
+        : 0;
+      const msaaTarget = new THREE.WebGLRenderTarget(
+        Math.max(1, Math.floor(width * pixelRatio)),
+        Math.max(1, Math.floor(height * pixelRatio)),
+        {
+          type: THREE.HalfFloatType,
+          samples: msaaSamples,
+        }
+      );
+
+      composer = new EffectComposer(renderer);
+      composer.reset(msaaTarget);
+      composer.setPixelRatio(pixelRatio);
+      composer.setSize(width, height);
+      composer.addPass(new RenderPass(scene, camera));
+
+      dofPass = new SubtleDepthOfFieldPass(scene, camera, {
+        focus: _camCurrentPos.z - 0.04,
+        focusDeadZone: 0.56,
+        blurRange: 2.5,
+        maxBlur: width < 640 ? 0.0042 : 0.0052,
+        depthHiddenObjects,
+      });
+      composer.addPass(dofPass);
+
+      outputPass = new OutputPass();
+      composer.addPass(outputPass);
     }
+
+    let currentOffset = targetOffsetRef.current;
+    let pointerParallaxX = 0;
+    let pointerParallaxY = 0;
+    let smoothParallaxX = 0;
+    let smoothParallaxY = 0;
+    let smoothRoll = 0;
 
     let frameId = 0;
     let renderBusy = false;
     let renderDirty = false;
-    let isTransitioning = false;
-    let shutterPulse = 0;
     let lastClockMs = performance.now();
 
-    function syncTrimHighlights() {
-      for (const target of frameTargets) {
-        const isActive =
-          target.index === focusedIndexRef.current ||
-          target.index === hoveredIndexRef.current;
-        target.frameAccentMat.color.setHex(isActive ? 0xb84a27 : 0x9f7e48);
-        target.frameAccentMat.emissive.setHex(isActive ? 0x3b1206 : 0x000000);
+    function applyCarouselLayout(offsetValue: number, colorAlpha: number): boolean {
+      const slotSpacing = width < 640 ? 2.48 : 2.68;
+      let colorAnimating = false;
+      const nextClickable: THREE.Object3D[] = [];
+
+      for (const item of frameItems) {
+        const rel = item.index - offsetValue;
+        const absRel = Math.abs(rel);
+
+        const x = rel * slotSpacing;
+        const z = -Math.pow(absRel, 1.12) * 1.08;
+        const rotY = THREE.MathUtils.clamp(-rel * 0.29, -0.72, 0.72);
+        const scale = Math.max(0.66, 1 - absRel * 0.13);
+
+        item.group.position.set(x, 0, z);
+        item.group.rotation.y = rotY;
+        item.group.scale.setScalar(scale);
+
+        item.group.visible = absRel <= 4.2;
+        if (!item.group.visible) continue;
+
+        nextClickable.push(item.clickTargets[0], item.clickTargets[1]);
+
+        const isFocusedOrHover =
+          item.index === activeIndexRef.current ||
+          item.index === hoveredIndexRef.current;
+        const targetColor = isFocusedOrHover ? _colorFocused : _colorIdle;
+        const targetEmissive = isFocusedOrHover ? _emissiveFocused : _emissiveIdle;
+
+        if (colorAlpha >= 1) {
+          item.accentMat.color.copy(targetColor);
+          item.accentMat.emissive.copy(targetEmissive);
+        } else {
+          item.accentMat.color.lerp(targetColor, colorAlpha);
+          item.accentMat.emissive.lerp(targetEmissive, colorAlpha);
+          if (
+            Math.abs(item.accentMat.color.r - targetColor.r) > 0.004 ||
+            Math.abs(item.accentMat.color.g - targetColor.g) > 0.004 ||
+            Math.abs(item.accentMat.color.b - targetColor.b) > 0.004
+          ) {
+            colorAnimating = true;
+          } else {
+            item.accentMat.color.copy(targetColor);
+            item.accentMat.emissive.copy(targetEmissive);
+          }
+        }
       }
+
+      visibleClickableMeshes = nextClickable;
+      return colorAnimating;
     }
+
+    function getInterpolatedFraming(offsetValue: number) {
+      if (frameItems.length === 0) return { camZAdjust: 0, lookYAdjust: 0 };
+      const clamped = THREE.MathUtils.clamp(offsetValue, 0, frameItems.length - 1);
+      const lowIdx = Math.floor(clamped);
+      const highIdx = Math.min(frameItems.length - 1, lowIdx + 1);
+      const frac = clamped - lowIdx;
+      const a = frameItems[lowIdx];
+      const b = frameItems[highIdx];
+      return {
+        camZAdjust: THREE.MathUtils.lerp(a.camZAdjust, b.camZAdjust, frac),
+        lookYAdjust: THREE.MathUtils.lerp(a.lookYAdjust, b.lookYAdjust, frac),
+      };
+    }
+
+    applyCarouselLayout(currentOffset, 1);
 
     function afterDraw(cb: () => void) {
       if (disposed) return;
@@ -759,75 +783,125 @@ export function Exhibition3D({
         const delta = Math.min((now - lastClockMs) / 1000, 0.08);
         lastClockMs = now;
 
-        if (shutterPulse > 0.005) {
-          shutterPulse = THREE.MathUtils.damp(shutterPulse, 0, 12, delta);
-          camAssembly.shutterButton.position.y =
-            camAssembly.shutterRestY - shutterPulse * 0.036;
-          camAssembly.shutterDialGroup.rotation.y = shutterPulse * 0.45;
-          renderDirty = true;
-        } else if (shutterPulse !== 0) {
-          shutterPulse = 0;
-          camAssembly.shutterButton.position.y = camAssembly.shutterRestY;
-        }
-
-        if (isTransitioning) {
-          const lambda = 6.5;
-          camera.position.x = THREE.MathUtils.damp(
-            camera.position.x,
-            _camGoal.x,
-            lambda,
-            delta
-          );
-          camera.position.y = THREE.MathUtils.damp(
-            camera.position.y,
-            _camGoal.y,
-            lambda,
-            delta
-          );
-          camera.position.z = THREE.MathUtils.damp(
-            camera.position.z,
-            _camGoal.z,
-            lambda,
-            delta
-          );
-
-          controls.target.x = THREE.MathUtils.damp(
-            controls.target.x,
-            _targetGoal.x,
-            lambda,
-            delta
-          );
-          controls.target.y = THREE.MathUtils.damp(
-            controls.target.y,
-            _targetGoal.y,
-            lambda,
-            delta
-          );
-          controls.target.z = THREE.MathUtils.damp(
-            controls.target.z,
-            _targetGoal.z,
-            lambda,
-            delta
-          );
-
-          const remaining =
-            camera.position.distanceTo(_camGoal) +
-            controls.target.distanceTo(_targetGoal);
-          if (remaining < 0.015) {
-            camera.position.copy(_camGoal);
-            controls.target.copy(_targetGoal);
-            isTransitioning = false;
+        const goalOffset = targetOffsetRef.current;
+        if (prefersReducedMotion || isSoftwareGl) {
+          currentOffset = goalOffset;
+        } else if (isTouchingRef.current) {
+          // Responsive finger tracking with micro-smoothing
+          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 22, delta);
+          if (Math.abs(currentOffset - goalOffset) > 0.0008) {
+            renderDirty = true;
+          }
+        } else {
+          // Smooth exponential glide when settling to a slide
+          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 6.4, delta);
+          if (Math.abs(currentOffset - goalOffset) < 0.0008) {
+            currentOffset = goalOffset;
           } else {
             renderDirty = true;
           }
         }
 
-        const didDamp = controls.update();
-        if (didDamp) {
+        if (!prefersReducedMotion && !isSoftwareGl) {
+          smoothParallaxX = THREE.MathUtils.damp(
+            smoothParallaxX,
+            pointerParallaxX,
+            5.6,
+            delta
+          );
+          smoothParallaxY = THREE.MathUtils.damp(
+            smoothParallaxY,
+            pointerParallaxY,
+            5.6,
+            delta
+          );
+          if (
+            Math.abs(smoothParallaxX - pointerParallaxX) > 0.0008 ||
+            Math.abs(smoothParallaxY - pointerParallaxY) > 0.0008
+          ) {
+            renderDirty = true;
+          }
+        }
+
+        const camBase = getResponsiveCamBase(width, height);
+        const framing = getInterpolatedFraming(currentOffset);
+        const aspectPullbackScale = camBase.viewportAspect < 0.85 ? 1.15 : 0.65;
+
+        const deltaOffset = goalOffset - currentOffset;
+        const travelIntensity = Math.min(1, Math.abs(deltaOffset) * 1.15);
+        const midSlideGap = Math.sin(
+          Math.min(1, Math.abs(currentOffset - Math.round(currentOffset)) * 2) *
+            (Math.PI * 0.5)
+        );
+        const arcPullback = Math.max(travelIntensity * 0.42, midSlideGap * 0.28);
+
+        const swipeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.22, -0.32, 0.32);
+        const gazeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.16, -0.24, 0.24);
+
+        _camTargetPos.set(
+          smoothParallaxX * 0.34 + swipeLeadX,
+          camBase.baseY + smoothParallaxY * 0.14 - arcPullback * 0.06,
+          camBase.baseZ +
+            framing.camZAdjust * aspectPullbackScale +
+            arcPullback
+        );
+        _lookTarget.set(
+          smoothParallaxX * 0.08 + gazeLeadX,
+          camBase.lookY + framing.lookYAdjust,
+          0
+        );
+
+        const targetRoll = THREE.MathUtils.clamp(
+          -deltaOffset * 0.016 + smoothParallaxX * 0.006,
+          -0.022,
+          0.022
+        );
+
+        let colorAlpha = 1;
+        if (prefersReducedMotion || isSoftwareGl) {
+          _camCurrentPos.copy(_camTargetPos);
+          _lookCurrent.copy(_lookTarget);
+          smoothRoll = 0;
+        } else {
+          const posAlpha = 1 - Math.exp(-5.4 * delta);
+          const lookAlpha = 1 - Math.exp(-6.8 * delta);
+          colorAlpha = 1 - Math.exp(-8.5 * delta);
+
+          _camCurrentPos.lerp(_camTargetPos, posAlpha);
+          _lookCurrent.lerp(_lookTarget, lookAlpha);
+          smoothRoll = THREE.MathUtils.damp(smoothRoll, targetRoll, 5.2, delta);
+
+          if (
+            _camCurrentPos.distanceToSquared(_camTargetPos) > 0.000001 ||
+            _lookCurrent.distanceToSquared(_lookTarget) > 0.000001 ||
+            Math.abs(smoothRoll - targetRoll) > 0.0003
+          ) {
+            renderDirty = true;
+          } else {
+            _camCurrentPos.copy(_camTargetPos);
+            _lookCurrent.copy(_lookTarget);
+            smoothRoll = targetRoll;
+          }
+        }
+
+        camera.position.copy(_camCurrentPos);
+        camera.lookAt(_lookCurrent);
+        if (Math.abs(smoothRoll) > 0.0001) {
+          camera.rotation.z += smoothRoll;
+        }
+
+        const colorAnimating = applyCarouselLayout(currentOffset, colorAlpha);
+        if (colorAnimating) {
           renderDirty = true;
         }
 
-        renderer.render(scene, camera);
+        if (composer && dofPass) {
+          dofPass.setFocus(Math.max(1.5, _camCurrentPos.z - 0.04));
+          dofPass.uniforms.maxBlur.value = width < 640 ? 0.0042 : 0.0052;
+          composer.render();
+        } else {
+          renderer.render(scene, camera);
+        }
 
         const done = () => {
           renderBusy = false;
@@ -843,44 +917,14 @@ export function Exhibition3D({
       });
     }
 
-    const focusFrame = (idx: number) => {
-      const target = frameTargets[idx];
-      if (!target) return;
-      focusedIndexRef.current = idx;
-      setFocusedIndex(idx);
-      syncTrimHighlights();
-      _camGoal.copy(target.focusCamPos);
-      _targetGoal.copy(target.focusLookAt);
-      isTransitioning = true;
+    requestRenderRef.current = () => {
       lastClockMs = performance.now();
       requestRender();
     };
-
-    const resetOverview = () => {
-      _camGoal.copy(defaultCamPos);
-      _targetGoal.copy(defaultLookAt);
-      isTransitioning = true;
-      lastClockMs = performance.now();
-      requestRender();
-    };
-
-    focusTriggerRef.current = focusFrame;
-    resetTriggerRef.current = resetOverview;
-
-    const onControlStart = () => {
-      isTransitioning = false;
-    };
-    const onControlChange = () => {
-      requestRender();
-    };
-    controls.addEventListener('start', onControlStart);
-    controls.addEventListener('change', onControlChange);
 
     const raycaster = new THREE.Raycaster();
     raycaster.layers.set(1);
     const pointerNdc = new THREE.Vector2();
-    let downX = 0;
-    let downY = 0;
     let lastHoverCheck = 0;
 
     const updateNdc = (clientX: number, clientY: number) => {
@@ -889,104 +933,58 @@ export function Exhibition3D({
       pointerNdc.y = -((clientY - rect.top) / rect.height) * 2 + 1;
     };
 
-    const onPointerMove = (e: PointerEvent) => {
+    handleTapAtRef.current = (clientX: number, clientY: number) => {
+      updateNdc(clientX, clientY);
+      camera.updateMatrixWorld();
+      raycaster.setFromCamera(pointerNdc, camera);
+      const hits = raycaster.intersectObjects(visibleClickableMeshes, false);
+      if (hits.length > 0 && typeof hits[0].object.userData.artworkIndex === 'number') {
+        const hitIdx = hits[0].object.userData.artworkIndex as number;
+        if (hitIdx === activeIndexRef.current) {
+          const selected = artworksRef.current[hitIdx];
+          if (selected) onSelectRef.current(selected);
+        } else {
+          swiperRef.current?.slideTo(hitIdx);
+        }
+      }
+    };
+
+    handleHoverAtRef.current = (clientX: number, clientY: number) => {
       const now = performance.now();
       if (now - lastHoverCheck < 50) return;
       lastHoverCheck = now;
 
-      updateNdc(e.clientX, e.clientY);
+      updateNdc(clientX, clientY);
+      camera.updateMatrixWorld();
       raycaster.setFromCamera(pointerNdc, camera);
-      const hits = raycaster.intersectObjects(clickableMeshes, false);
+      const hits = raycaster.intersectObjects(visibleClickableMeshes, false);
+      const nextHovered =
+        hits.length > 0 && typeof hits[0].object.userData.artworkIndex === 'number'
+          ? (hits[0].object.userData.artworkIndex as number)
+          : null;
 
-      let nextHoveredFrame: number | null = null;
-      let nextHoveredCam = false;
-      if (hits.length > 0) {
-        const hitData = hits[0].object.userData;
-        if (hitData.isCameraProp) {
-          nextHoveredCam = true;
-        } else if (typeof hitData.artworkIndex === 'number') {
-          nextHoveredFrame = hitData.artworkIndex;
-        }
-      }
-
-      if (nextHoveredFrame !== hoveredIndexRef.current) {
-        hoveredIndexRef.current = nextHoveredFrame;
-        setHoveredIndex(nextHoveredFrame);
-        syncTrimHighlights();
+      if (nextHovered !== hoveredIndexRef.current) {
+        hoveredIndexRef.current = nextHovered;
+        setHoveredIndex(nextHovered);
         requestRender();
       }
-      if (nextHoveredCam !== hoveredCameraRef.current) {
-        hoveredCameraRef.current = nextHoveredCam;
-        setHoveredCameraProp(nextHoveredCam);
-      }
-
-      renderer.domElement.style.cursor =
-        nextHoveredFrame !== null || nextHoveredCam ? 'pointer' : 'grab';
     };
 
-    const onPointerDown = (e: PointerEvent) => {
-      downX = e.clientX;
-      downY = e.clientY;
+    handlePointerParallaxRef.current = (nx: number, ny: number) => {
+      pointerParallaxX = nx * 0.45;
+      pointerParallaxY = ny * 0.35;
+      requestRender();
     };
 
-    const onPointerUp = (e: PointerEvent) => {
-      if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return;
-      updateNdc(e.clientX, e.clientY);
-      raycaster.setFromCamera(pointerNdc, camera);
-      const hits = raycaster.intersectObjects(clickableMeshes, false);
-      if (hits.length > 0) {
-        const hitData = hits[0].object.userData;
-        if (hitData.isCameraProp) {
-          shutterPulse = 1;
-          lastClockMs = performance.now();
-          requestRender();
-          return;
-        }
-        if (typeof hitData.artworkIndex === 'number') {
-          const hitIdx = hitData.artworkIndex;
-          if (hitIdx === focusedIndexRef.current) {
-            const selected = artworksRef.current[hitIdx];
-            if (selected) onSelectRef.current(selected);
-          } else {
-            focusFrame(hitIdx);
-          }
-        }
+    handlePointerLeaveRef.current = () => {
+      pointerParallaxX = 0;
+      pointerParallaxY = 0;
+      if (hoveredIndexRef.current !== null) {
+        hoveredIndexRef.current = null;
+        setHoveredIndex(null);
       }
+      requestRender();
     };
-
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (isModalOpenRef.current) return;
-      const target = e.target as HTMLElement | null;
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-      ) {
-        return;
-      }
-      if (artworksRef.current.length === 0) return;
-
-      if (e.key === 'ArrowRight') {
-        e.preventDefault();
-        const nextIdx =
-          (focusedIndexRef.current + 1) % artworksRef.current.length;
-        focusFrame(nextIdx);
-      } else if (e.key === 'ArrowLeft') {
-        e.preventDefault();
-        const prevIdx =
-          (focusedIndexRef.current - 1 + artworksRef.current.length) %
-          artworksRef.current.length;
-        focusFrame(prevIdx);
-      } else if (e.key === 'Escape') {
-        resetOverview();
-      }
-    };
-
-    renderer.domElement.addEventListener('pointermove', onPointerMove);
-    renderer.domElement.addEventListener('pointerdown', onPointerDown);
-    renderer.domElement.addEventListener('pointerup', onPointerUp);
-    window.addEventListener('keydown', onKeyDown);
 
     const onContextLost = (e: Event) => {
       e.preventDefault();
@@ -997,11 +995,15 @@ export function Exhibition3D({
 
     const handleResize = () => {
       if (!container || disposed) return;
-      const w = Math.max(container.clientWidth, 320);
-      const h = Math.max(container.clientHeight, 460);
-      camera.aspect = w / h;
+      width = Math.max(container.clientWidth, 300);
+      height = Math.max(container.clientHeight, 440);
+      camera.aspect = width / height;
       camera.updateProjectionMatrix();
-      renderer.setSize(w, h);
+      renderer.setSize(width, height);
+      if (composer) {
+        composer.setPixelRatio(renderer.getPixelRatio());
+        composer.setSize(width, height);
+      }
       requestRender();
     };
     const resizeObserver =
@@ -1014,19 +1016,18 @@ export function Exhibition3D({
 
     return () => {
       disposed = true;
-      focusTriggerRef.current = null;
-      resetTriggerRef.current = null;
+      requestRenderRef.current = null;
+      handleTapAtRef.current = null;
+      handleHoverAtRef.current = null;
+      handlePointerParallaxRef.current = null;
+      handlePointerLeaveRef.current = null;
       cancelAnimationFrame(frameId);
       clearTimeout(frameId);
       resizeObserver?.disconnect();
-      controls.removeEventListener('start', onControlStart);
-      controls.removeEventListener('change', onControlChange);
-      controls.dispose();
-      renderer.domElement.removeEventListener('pointermove', onPointerMove);
-      renderer.domElement.removeEventListener('pointerdown', onPointerDown);
-      renderer.domElement.removeEventListener('pointerup', onPointerUp);
       renderer.domElement.removeEventListener('webglcontextlost', onContextLost);
-      window.removeEventListener('keydown', onKeyDown);
+      dofPass?.dispose();
+      outputPass?.dispose();
+      composer?.dispose();
       disposeObject3D(scene);
       envTarget.dispose();
       renderer.dispose();
@@ -1038,10 +1039,10 @@ export function Exhibition3D({
 
   if (isLoading) {
     return (
-      <div className="relative w-full h-[calc(100dvh-6.75rem)] min-h-[500px] bg-[#EAE0CA] border-b border-[#221B15]/20 flex items-center justify-center px-6">
+      <div className="relative w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[460px] bg-[#EAE0CA] border-b border-[#221B15]/20 flex items-center justify-center px-6">
         <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] px-6 py-4 shadow-[4px_4px_0px_rgba(34,27,21,0.1)] text-center">
           <p className="font-mono-retro text-[11px] uppercase tracking-[0.14em] text-[#B84A27]">
-            3D Exhibition Room
+            3D Exhibition Stage
           </p>
           <p className="mt-1 font-serif-editorial text-lg text-[#221B15]">
             Loading curation…
@@ -1053,7 +1054,7 @@ export function Exhibition3D({
 
   if (artworks.length === 0) {
     return (
-      <div className="w-full h-[calc(100dvh-6.75rem)] min-h-[460px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
+      <div className="w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
         <div className="py-12 px-8 text-center bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.1)]">
           <p className="font-serif-editorial text-2xl text-[#221B15]">
             No artworks in this category yet.
@@ -1061,7 +1062,7 @@ export function Exhibition3D({
           <button
             type="button"
             onClick={onExit3D}
-            className="mt-4 min-h-[40px] px-4 font-mono-retro text-[11px] uppercase tracking-[0.08em] bg-[#221B15] text-[#F8F3E6] hover:bg-[#B84A27] rounded-[2px] transition-colors"
+            className="mt-4 min-h-[44px] px-4 font-mono-retro text-[11px] uppercase tracking-[0.08em] bg-[#221B15] text-[#F8F3E6] hover:bg-[#B84A27] rounded-[2px] transition-colors"
           >
             Switch to Grid View
           </button>
@@ -1072,7 +1073,7 @@ export function Exhibition3D({
 
   if (webglUnsupported) {
     return (
-      <div className="w-full h-[calc(100dvh-6.75rem)] min-h-[460px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
+      <div className="w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
         <div className="p-8 text-center bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.12)] max-w-md">
           <p className="font-serif-editorial text-xl text-[#221B15]">
             3D Exhibition requires WebGL support in your browser.
@@ -1080,7 +1081,7 @@ export function Exhibition3D({
           <button
             type="button"
             onClick={onExit3D}
-            className="mt-4 min-h-[40px] px-4 py-2 font-mono-retro text-xs uppercase tracking-wider bg-[#221B15] text-[#F8F3E6] hover:bg-[#B84A27] rounded-[2px] transition-colors"
+            className="mt-4 min-h-[44px] px-4 py-2 font-mono-retro text-xs uppercase tracking-wider bg-[#221B15] text-[#F8F3E6] hover:bg-[#B84A27] rounded-[2px] transition-colors"
           >
             Open Grid View
           </button>
@@ -1089,43 +1090,146 @@ export function Exhibition3D({
     );
   }
 
-  const currentArtwork = artworks[focusedIndex] ?? artworks[0];
+  const currentArtwork = artworks[activeIndex] ?? artworks[0];
   const hoveredArtwork =
     hoveredIndex !== null ? artworks[hoveredIndex] : undefined;
 
   const handlePrev = () => {
-    const nextIdx = (focusedIndex - 1 + artworks.length) % artworks.length;
-    focusTriggerRef.current?.(nextIdx);
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    if (activeIndex <= 0) {
+      swiper.slideTo(artworks.length - 1);
+    } else {
+      swiper.slidePrev();
+    }
   };
 
   const handleNext = () => {
-    const nextIdx = (focusedIndex + 1) % artworks.length;
-    focusTriggerRef.current?.(nextIdx);
+    const swiper = swiperRef.current;
+    if (!swiper) return;
+    if (activeIndex >= artworks.length - 1) {
+      swiper.slideTo(0);
+    } else {
+      swiper.slideNext();
+    }
   };
 
-  let interactionHint = 'Drag to orbit · Right-drag to pan · Click frame to focus';
-  if (hoveredCameraProp) {
-    interactionHint = 'Click 35mm rangefinder camera to fire shutter';
-  } else if (hoveredArtwork) {
-    interactionHint =
-      hoveredIndex === focusedIndex
-        ? `Click again to inspect · ${hoveredArtwork.title}`
-        : `Click to focus · ${hoveredArtwork.title}`;
-  }
+  const interactionHint = hoveredArtwork
+    ? hoveredIndex === activeIndex
+      ? `Tap to inspect · ${hoveredArtwork.title}`
+      : `Tap to view · ${hoveredArtwork.title}`
+    : 'Swipe left or right · Tap center frame to inspect';
 
   return (
-    <div className="relative w-full h-[calc(100dvh-6.75rem)] min-h-[500px] bg-[#EAE0CA] border-b border-[#221B15]/20 overflow-hidden select-none">
+    <div className="relative w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[460px] bg-[#EAE0CA] border-b border-[#221B15]/20 overflow-hidden select-none">
       {/* Isolated WebGL Container */}
       <div
         ref={mountRef}
-        aria-label="Interactive 3D museum exhibition wall"
-        className="w-full h-full cursor-grab active:cursor-grabbing"
+        aria-label="Interactive 3D exhibition carousel"
+        className="w-full h-full"
       />
 
-      {/* Top-Left Editorial Title Plaque (No backdrop-filter over WebGL) */}
-      <div className="pointer-events-none absolute top-3.5 left-3.5 sm:top-5 sm:left-6 z-10 max-w-[min(430px,calc(100%-2rem))] bg-[#F8F3E6]/95 border border-[#221B15]/25 px-3.5 py-2.5 sm:px-4 sm:py-3 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.12)]">
+      {/* Native-Feel Touch & Swipe Layer Powered by Swiper */}
+      <div
+        className={`absolute inset-0 z-[5] touch-pan-y ${
+          hoveredIndex !== null ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+        }`}
+        onPointerMove={(e) => {
+          if (e.pointerType !== 'mouse') return;
+          const rect = e.currentTarget.getBoundingClientRect();
+          const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+          const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+          handlePointerParallaxRef.current?.(nx, ny);
+          handleHoverAtRef.current?.(e.clientX, e.clientY);
+        }}
+        onPointerLeave={() => {
+          handlePointerLeaveRef.current?.();
+        }}
+      >
+        <Swiper
+          modules={[Keyboard, Mousewheel]}
+          slidesPerView={1}
+          speed={560}
+          threshold={6}
+          touchAngle={45}
+          longSwipesRatio={0.22}
+          shortSwipes={true}
+          resistance={true}
+          resistanceRatio={0.65}
+          watchSlidesProgress={true}
+          simulateTouch={true}
+          keyboard={{ enabled: !isModalOpen }}
+          mousewheel={{ forceToAxis: true, sensitivity: 1 }}
+          className="w-full h-full"
+          onSwiper={(swiper) => {
+            swiperRef.current = swiper;
+          }}
+          onTouchStart={() => {
+            isTouchingRef.current = true;
+          }}
+          onTouchEnd={(swiper) => {
+            isTouchingRef.current = false;
+            const idx = Math.max(
+              0,
+              Math.min(artworksRef.current.length - 1, swiper.activeIndex)
+            );
+            targetOffsetRef.current = idx;
+            requestRenderRef.current?.();
+          }}
+          onProgress={(_swiper, progress) => {
+            if (!isTouchingRef.current) return;
+            const count = artworksRef.current.length;
+            targetOffsetRef.current =
+              count <= 1 ? 0 : progress * (count - 1);
+            requestRenderRef.current?.();
+          }}
+          onSlideChange={(swiper) => {
+            const idx = Math.max(
+              0,
+              Math.min(artworksRef.current.length - 1, swiper.activeIndex)
+            );
+            activeIndexRef.current = idx;
+            setActiveIndex(idx);
+            targetOffsetRef.current = idx;
+            requestRenderRef.current?.();
+          }}
+          onTransitionEnd={(swiper) => {
+            const idx = Math.max(
+              0,
+              Math.min(artworksRef.current.length - 1, swiper.activeIndex)
+            );
+            targetOffsetRef.current = idx;
+            requestRenderRef.current?.();
+          }}
+          onTap={(_swiper, event) => {
+            let clientX: number | undefined;
+            let clientY: number | undefined;
+            if ('changedTouches' in event && event.changedTouches.length > 0) {
+              clientX = event.changedTouches[0].clientX;
+              clientY = event.changedTouches[0].clientY;
+            } else if ('clientX' in event) {
+              clientX = event.clientX;
+              clientY = event.clientY;
+            }
+            if (typeof clientX === 'number' && typeof clientY === 'number') {
+              handleTapAtRef.current?.(clientX, clientY);
+            }
+          }}
+        >
+          {artworks.map((artwork, index) => (
+            <SwiperSlide
+              key={artwork.id}
+              aria-label={`Slide ${index + 1} of ${artworks.length}: ${artwork.title}`}
+              className="w-full h-full"
+            />
+          ))}
+        </Swiper>
+      </div>
+
+      {/* Top-Left Compact Exhibition Plaque (No backdrop-blur over WebGL) */}
+      <div className="pointer-events-none absolute top-3 left-3 sm:top-5 sm:left-6 z-10 max-w-[min(420px,calc(100%-1.5rem))] bg-[#F8F3E6]/95 border border-[#221B15]/25 px-3 py-2 sm:px-4 sm:py-2.5 rounded-[2px] shadow-[2px_2px_0px_rgba(34,27,21,0.12)]">
         {(aboutKicker || aboutPeriod) && (
-          <p className="font-mono-retro text-[10px] uppercase tracking-[0.14em] text-[#B84A27] truncate">
+          <p className="font-mono-retro text-[9.5px] sm:text-[10px] uppercase tracking-[0.14em] text-[#B84A27] truncate">
             <span>{aboutKicker}</span>
             {aboutPeriod && (
               <>
@@ -1135,17 +1239,17 @@ export function Exhibition3D({
             )}
           </p>
         )}
-        <h1 className="mt-0.5 font-serif-editorial text-lg sm:text-xl font-semibold leading-tight text-[#221B15] truncate">
+        <h1 className="mt-0.5 font-serif-editorial text-base sm:text-xl font-semibold leading-tight text-[#221B15] truncate">
           {heroTitle}
         </h1>
-        <p className="mt-1 font-mono-retro text-[10px] uppercase tracking-[0.09em] text-[#635443] truncate">
+        <p className="mt-0.5 font-mono-retro text-[9.5px] sm:text-[10px] uppercase tracking-[0.08em] text-[#635443] truncate">
           {activeCategory} · {artworks.length} {artworks.length === 1 ? 'Work' : 'Works'} · {interactionHint}
         </p>
       </div>
 
-      {/* Collapsible Bottom Control Dock (Zero Viewport Occlusion) */}
+      {/* Collapsible Bottom Thumb-Zone Dock (Zero Viewport Occlusion) */}
       <div
-        className={`absolute left-1/2 -translate-x-1/2 bottom-3 sm:bottom-5 z-10 w-[min(780px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-5 z-10 w-[min(680px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isDockCollapsed ? 'translate-y-[calc(100%-30px)]' : 'translate-y-0'
         }`}
       >
@@ -1169,68 +1273,87 @@ export function Exhibition3D({
           </button>
         </div>
 
-        <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.16)] px-3 py-2.5 sm:px-4 sm:py-3 flex flex-wrap items-center justify-between gap-2.5">
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={handlePrev}
-              disabled={artworks.length <= 1}
-              aria-label="Focus previous frame"
-              className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/70 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" aria-hidden="true" />
-            </button>
-            <button
-              type="button"
-              onClick={handleNext}
-              disabled={artworks.length <= 1}
-              aria-label="Focus next frame"
-              className="min-h-[38px] min-w-[38px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/70 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
-            >
-              <ChevronRight className="w-4 h-4" aria-hidden="true" />
-            </button>
+        <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.16)] px-2.5 py-2 sm:px-4 sm:py-3 space-y-2">
+          <div className="flex items-center justify-between gap-2 sm:gap-3">
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={handlePrev}
+                disabled={artworks.length <= 1}
+                aria-label="Previous artwork"
+                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" aria-hidden="true" />
+              </button>
+              <button
+                type="button"
+                onClick={handleNext}
+                disabled={artworks.length <= 1}
+                aria-label="Next artwork"
+                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" aria-hidden="true" />
+              </button>
+            </div>
+
+            <div className="min-w-0 flex-1 px-1 text-left">
+              <p className="font-mono-retro text-[10px] uppercase tracking-[0.12em] text-[#B84A27] tabular-nums truncate">
+                {String(activeIndex + 1).padStart(2, '0')} /{' '}
+                {String(artworks.length).padStart(2, '0')} · {currentArtwork?.category}
+              </p>
+              <p className="font-serif-editorial text-sm sm:text-base font-semibold text-[#221B15] truncate">
+                {currentArtwork?.title}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => currentArtwork && onSelectArtwork(currentArtwork)}
+                className="min-h-[44px] px-3 sm:px-3.5 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap"
+              >
+                <Expand className="w-3.5 h-3.5" aria-hidden="true" />
+                <span>Inspect</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={onExit3D}
+                aria-label="Switch to Grid View"
+                className="min-h-[44px] px-2.5 sm:px-3 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#221B15] bg-[#EFE6D2] hover:bg-[#E3D7BE] border border-[#221B15]/25 rounded-[2px] transition-colors whitespace-nowrap"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden sm:inline">Grid</span>
+              </button>
+            </div>
           </div>
 
-          <div className="min-w-0 flex-1 px-1 text-center sm:text-left">
-            <p className="font-mono-retro text-[10px] uppercase tracking-[0.12em] text-[#B84A27] tabular-nums">
-              Frame {String(focusedIndex + 1).padStart(2, '0')} /{' '}
-              {String(artworks.length).padStart(2, '0')} · {currentArtwork?.category}
-            </p>
-            <p className="font-serif-editorial text-sm sm:text-base font-semibold text-[#221B15] truncate">
-              {currentArtwork?.title}
-            </p>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => resetTriggerRef.current?.()}
-              aria-label="Reset 3D camera overview"
-              title="Reset overview"
-              className="min-h-[38px] px-2.5 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#635443] hover:text-[#221B15] border border-[#221B15]/20 hover:border-[#221B15]/50 rounded-[2px] transition-colors whitespace-nowrap"
+          {artworks.length > 1 && (
+            <div
+              role="tablist"
+              aria-label="Jump to frame"
+              className="flex items-center gap-1.5 pt-0.5"
             >
-              <RotateCcw className="w-3.5 h-3.5" aria-hidden="true" />
-              <span className="hidden sm:inline">Overview</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => currentArtwork && onSelectArtwork(currentArtwork)}
-              className="min-h-[38px] px-3 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap"
-            >
-              <Expand className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Inspect Photo</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={onExit3D}
-              className="min-h-[38px] px-2.5 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#221B15] bg-[#EFE6D2] hover:bg-[#E3D7BE] border border-[#221B15]/25 rounded-[2px] transition-colors whitespace-nowrap"
-            >
-              <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
-              <span>Grid View</span>
-            </button>
-          </div>
+              {artworks.map((artwork, index) => {
+                const isSelected = index === activeIndex;
+                return (
+                  <button
+                    key={artwork.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    aria-label={`View frame ${index + 1}: ${artwork.title}`}
+                    onClick={() => swiperRef.current?.slideTo(index)}
+                    className={`h-1.5 flex-1 rounded-[1px] transition-colors ${
+                      isSelected
+                        ? 'bg-[#B84A27]'
+                        : 'bg-[#221B15]/15 hover:bg-[#221B15]/35'
+                    }`}
+                  />
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>
