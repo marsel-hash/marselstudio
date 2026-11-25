@@ -103,6 +103,8 @@ function ArtworkTile({
 
   const formattedPlate = String(plateNumber).padStart(2, '0');
 
+  const shouldAnimatePlate = plateNumber <= 8;
+
   return (
     <button
       ref={tileRef}
@@ -112,10 +114,12 @@ function ArtworkTile({
       onFocus={handleWarmIntent}
       onTouchStart={handleWarmIntent}
       aria-label={`View artwork ${artwork.title}, ${artwork.year}`}
-      style={{
-        animationDelay: `${Math.min(plateNumber - 1, 6) * 35}ms`,
-      }}
-      className="animate-gallery-plate group relative block w-full text-left bg-[#F8F3E6] p-3 sm:p-3.5 border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow,transform] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2] active:translate-y-0"
+      style={
+        shouldAnimatePlate
+          ? { animationDelay: `${Math.min(plateNumber - 1, 6) * 35}ms` }
+          : undefined
+      }
+      className={`${shouldAnimatePlate ? 'animate-gallery-plate ' : ''}${!isAboveFold ? 'artwork-plate-contain ' : ''}group relative block w-full text-left bg-[#F8F3E6] p-3 sm:p-3.5 border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2]`}
     >
       {/* Vintage Album Corner Mounting Ticks */}
       <span
@@ -150,7 +154,7 @@ function ArtworkTile({
         />
 
         {!hasError ? (
-          <div className="w-full h-full transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.022]">
+          <div className="w-full h-full md:transition-transform md:duration-700 md:ease-[cubic-bezier(0.16,1,0.3,1)] md:group-hover:scale-[1.022]">
             <img
               ref={imgRef}
               src={artwork.src}

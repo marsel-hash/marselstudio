@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Mousewheel } from 'swiper/modules';
@@ -201,6 +201,12 @@ export function Lightbox({
     };
   }, [isOpen, onClose, goPrev, goNext]);
 
+  const swiperModules = useMemo(() => [Mousewheel], []);
+  const mousewheelConfig = useMemo(
+    () => ({ forceToAxis: true, sensitivity: 1 }),
+    []
+  );
+
   if (!isOpen || !artwork || currentIndex === null) {
     return null;
   }
@@ -334,7 +340,7 @@ export function Lightbox({
         )}
 
         <Swiper
-          modules={[Mousewheel]}
+          modules={swiperModules}
           initialSlide={currentIndex}
           slidesPerView={1}
           spaceBetween={18}
@@ -346,7 +352,7 @@ export function Lightbox({
           followFinger={true}
           resistance={true}
           resistanceRatio={0.7}
-          mousewheel={{ forceToAxis: true, sensitivity: 1 }}
+          mousewheel={mousewheelConfig}
           className="w-full h-full"
           onSwiper={(swiper) => {
             swiperRef.current = swiper;

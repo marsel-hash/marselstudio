@@ -59,6 +59,8 @@ export function RetroCamera3D() {
 
     const width = Math.max(container.clientWidth, 220);
     const height = Math.max(container.clientHeight, 180);
+    const isMobilePerf =
+      width < 768 || window.matchMedia('(pointer: coarse)').matches;
 
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
@@ -69,11 +71,15 @@ export function RetroCamera3D() {
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.08;
     renderer.setPixelRatio(
-      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
+      isSoftwareGl
+        ? 1
+        : Math.min(window.devicePixelRatio || 1, isMobilePerf ? 1.5 : 2)
     );
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = !isSoftwareGl;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = isMobilePerf
+      ? THREE.PCFShadowMap
+      : THREE.PCFSoftShadowMap;
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
@@ -110,7 +116,8 @@ export function RetroCamera3D() {
     keyLight.position.set(3.2, 4.6, 3.8);
     if (!isSoftwareGl) {
       keyLight.castShadow = true;
-      keyLight.shadow.mapSize.set(1024, 1024);
+      const shadowRes = isMobilePerf ? 512 : 1024;
+      keyLight.shadow.mapSize.set(shadowRes, shadowRes);
       keyLight.shadow.camera.near = 0.5;
       keyLight.shadow.camera.far = 14;
       keyLight.shadow.camera.left = -2.4;
@@ -212,9 +219,10 @@ export function RetroCamera3D() {
     resizeObserver?.observe(container);
 
     const clock = new THREE.Clock();
+    let isInViewport = true;
 
     function afterDraw(cb: () => void) {
-      if (disposed) return;
+      if (disposed || !isInViewport) return;
       const gl = renderer.getContext() as WebGL2RenderingContext;
       if (typeof gl.fenceSync === 'function') {
         const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
@@ -239,7 +247,7 @@ export function RetroCamera3D() {
     }
 
     const tick = () => {
-      if (disposed) return;
+      if (disposed || !isInViewport) return;
       const delta = Math.min(clock.getDelta(), 0.08);
       const elapsed = clock.getElapsedTime();
 
@@ -267,18 +275,45 @@ export function RetroCamera3D() {
       }
     };
 
-    if (isSoftwareGl) {
-      renderer.render(scene, camera);
-      afterDraw(tick);
-    } else {
-      frameId = requestAnimationFrame(tick);
-    }
+    const scheduleTick = () => {
+      if (disposed || !isInViewport) return;
+      clock.getDelta();
+      if (isSoftwareGl) {
+        renderer.render(scene, camera);
+        afterDraw(tick);
+      } else {
+        cancelAnimationFrame(frameId);
+        frameId = requestAnimationFrame(tick);
+      }
+    };
+
+    const visibilityObserver =
+      typeof IntersectionObserver !== 'undefined'
+        ? new IntersectionObserver(
+            (entries) => {
+              const visible = entries.some((e) => e.isIntersecting);
+              if (visible === isInViewport) return;
+              isInViewport = visible;
+              if (visible) {
+                scheduleTick();
+              } else {
+                cancelAnimationFrame(frameId);
+                clearTimeout(frameId);
+              }
+            },
+            { threshold: 0.02 }
+          )
+        : null;
+    visibilityObserver?.observe(container);
+
+    scheduleTick();
 
     return () => {
       disposed = true;
       shutterTriggerRef.current = null;
       cancelAnimationFrame(frameId);
       clearTimeout(frameId);
+      visibilityObserver?.disconnect();
       resizeObserver?.disconnect();
       controls.removeEventListener('start', onControlStart);
       controls.removeEventListener('end', onControlEnd);

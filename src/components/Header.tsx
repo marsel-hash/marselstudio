@@ -46,7 +46,7 @@ export function Header({
   const allCategories = ['All', ...categories];
 
   return (
-    <header className="sticky top-0 z-30 h-16 bg-[#EFE6D2]/95 backdrop-blur-md border-b border-[#221B15]/25">
+    <header className="sticky top-0 z-30 h-16 bg-[#EFE6D2] border-b border-[#221B15]/25">
       <div className="max-w-6xl mx-auto h-full px-4 sm:px-8 lg:px-12 flex items-center justify-between gap-8">
         <a
           href="#gallery"

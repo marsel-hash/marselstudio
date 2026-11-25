@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { Box, Columns2, Columns3, LayoutGrid } from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth, BOOTSTRAPPED_ADMIN_EMAIL } from './firebase';
@@ -15,15 +15,26 @@ import {
   type SiteConfig,
 } from './types/gallery';
 import { Header } from './components/Header';
-import { MasonryGrid } from './components/MasonryGrid';
 import { Lightbox } from './components/Lightbox';
-import { AboutModal } from './components/AboutModal';
-import { AdminPanel } from './components/AdminPanel';
 import { SocialLinks } from './components/SocialLinks';
-import { RetroCamera3D } from './components/RetroCamera3D';
 import { Exhibition3D } from './components/Exhibition3D';
 import { AmbientAudioPlayer } from './components/AmbientAudioPlayer';
 import { readGalleryCache, writeGalleryCache } from './utils/galleryCache';
+
+const MasonryGrid = lazy(() =>
+  import('./components/MasonryGrid').then((m) => ({ default: m.MasonryGrid }))
+);
+const RetroCamera3D = lazy(() =>
+  import('./components/RetroCamera3D').then((m) => ({
+    default: m.RetroCamera3D,
+  }))
+);
+const AboutModal = lazy(() =>
+  import('./components/AboutModal').then((m) => ({ default: m.AboutModal }))
+);
+const AdminPanel = lazy(() =>
+  import('./components/AdminPanel').then((m) => ({ default: m.AdminPanel }))
+);
 
 export default function App() {
   const [initialCache] = useState(() => readGalleryCache());
@@ -385,7 +396,9 @@ export default function App() {
                 </div>
 
                 <div className="flex items-center justify-center sm:justify-end">
-                  <RetroCamera3D />
+                  <Suspense fallback={<div className="w-64 h-44 sm:h-48 lg:h-52" />}>
+                    <RetroCamera3D />
+                  </Suspense>
                 </div>
               </div>
 
@@ -533,13 +546,21 @@ export default function App() {
               </div>
             </div>
 
-            <MasonryGrid
-              artworks={filteredArtworks}
-              desktopColumns={desktopColumns}
-              showCaptions={showCaptions}
-              isLoading={!isGalleryReady}
-              onSelectArtwork={handleSelectArtwork}
-            />
+            <Suspense
+              fallback={
+                <div className="py-12 text-center font-mono-retro text-xs uppercase tracking-wider text-[#635443]">
+                  Loading gallery…
+                </div>
+              }
+            >
+              <MasonryGrid
+                artworks={filteredArtworks}
+                desktopColumns={desktopColumns}
+                showCaptions={showCaptions}
+                isLoading={!isGalleryReady}
+                onSelectArtwork={handleSelectArtwork}
+              />
+            </Suspense>
           </section>
         </main>
       )}
@@ -573,31 +594,39 @@ export default function App() {
         onChangeIndex={handleChangeIndex}
       />
 
-      <AboutModal
-        isOpen={isAboutOpen}
-        config={siteConfig}
-        onClose={() => setIsAboutOpen(false)}
-      />
+      {isAboutOpen && (
+        <Suspense fallback={null}>
+          <AboutModal
+            isOpen={isAboutOpen}
+            config={siteConfig}
+            onClose={() => setIsAboutOpen(false)}
+          />
+        </Suspense>
+      )}
 
-      <AdminPanel
-        isOpen={isAdminOpen}
-        user={user}
-        isAdmin={isBootstrappedAdmin}
-        authReady={authReady}
-        siteConfig={siteConfig}
-        configExistsInDb={configExistsInDb}
-        artworks={allManagedArtworks}
-        artworksExistInDb={artworksExistInDb}
-        onClose={() => {
-          setIsAdminOpen(false);
-          if (
-            window.location.pathname === '/admin' ||
-            window.location.hash === '#admin'
-          ) {
-            window.history.replaceState(null, '', '/');
-          }
-        }}
-      />
+      {isAdminOpen && (
+        <Suspense fallback={null}>
+          <AdminPanel
+            isOpen={isAdminOpen}
+            user={user}
+            isAdmin={isBootstrappedAdmin}
+            authReady={authReady}
+            siteConfig={siteConfig}
+            configExistsInDb={configExistsInDb}
+            artworks={allManagedArtworks}
+            artworksExistInDb={artworksExistInDb}
+            onClose={() => {
+              setIsAdminOpen(false);
+              if (
+                window.location.pathname === '/admin' ||
+                window.location.hash === '#admin'
+              ) {
+                window.history.replaceState(null, '', '/');
+              }
+            }}
+          />
+        </Suspense>
+      )}
     </div>
   );
 }

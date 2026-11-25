@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
@@ -45,6 +45,9 @@ interface CarouselFrameItem {
   clickTargets: THREE.Object3D[];
   camZAdjust: number;
   lookYAdjust: number;
+  ensurePlaque: () => void;
+  startTextureLoad: () => void;
+  texState: 'idle' | 'loading' | 'done';
 }
 
 const _camTargetPos = new THREE.Vector3();
@@ -56,38 +59,66 @@ const _colorIdle = new THREE.Color(0x9f7e48);
 const _emissiveFocused = new THREE.Color(0x3b1206);
 const _emissiveIdle = new THREE.Color(0x000000);
 
-function createFallbackArtworkTexture(
-  artwork: Artwork,
+function createSharedPlaceholderTexture(
   maxAnisotropy: number
 ): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
+  canvas.width = 256;
+  canvas.height = 256;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    const grad = ctx.createLinearGradient(0, 0, 512, 512);
-    grad.addColorStop(0, artwork.placeholderFrom || '#DCDAD4');
-    grad.addColorStop(1, artwork.placeholderTo || '#B8B5AE');
+    const grad = ctx.createLinearGradient(0, 0, 256, 256);
+    grad.addColorStop(0, '#E5DCC8');
+    grad.addColorStop(1, '#CFC1A6');
     ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, 512, 512);
+    ctx.fillRect(0, 0, 256, 256);
 
-    ctx.strokeStyle = 'rgba(34, 27, 21, 0.25)';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(24, 24, 464, 464);
-
-    ctx.fillStyle = '#221b15';
-    ctx.textAlign = 'center';
-    ctx.font = 'bold 28px Georgia, serif';
-    ctx.fillText(artwork.title.slice(0, 26), 256, 244);
-
-    ctx.fillStyle = '#635443';
-    ctx.font = '18px "IBM Plex Mono", monospace';
-    ctx.fillText(`${artwork.category} · ${artwork.year}`, 256, 286);
+    ctx.strokeStyle = 'rgba(34, 27, 21, 0.16)';
+    ctx.lineWidth = 4;
+    ctx.strokeRect(14, 14, 228, 228);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
   tex.anisotropy = maxAnisotropy;
   return tex;
+}
+
+function downscaleTextureForStage(
+  loadedTex: THREE.Texture,
+  natW: number,
+  natH: number,
+  maxDim: number,
+  maxAnisotropy: number
+): THREE.Texture {
+  if (Math.max(natW, natH) <= maxDim) {
+    return loadedTex;
+  }
+  try {
+    const scale = maxDim / Math.max(natW, natH);
+    const targetW = Math.max(1, Math.round(natW * scale));
+    const targetH = Math.max(1, Math.round(natH * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = targetW;
+    canvas.height = targetH;
+    const ctx = canvas.getContext('2d');
+    const img = loadedTex.image as CanvasImageSource;
+    if (!ctx || !img) return loadedTex;
+
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(img, 0, 0, targetW, targetH);
+
+    const compactTex = new THREE.CanvasTexture(canvas);
+    compactTex.colorSpace = THREE.SRGBColorSpace;
+    compactTex.anisotropy = maxAnisotropy;
+    compactTex.generateMipmaps = true;
+    compactTex.minFilter = THREE.LinearMipmapLinearFilter;
+    compactTex.magFilter = THREE.LinearFilter;
+    loadedTex.dispose();
+    return compactTex;
+  } catch {
+    return loadedTex;
+  }
 }
 
 function createPlaqueTexture(
@@ -202,6 +233,14 @@ export function Exhibition3D({
     const isMobilePerf =
       width < 768 || window.matchMedia('(pointer: coarse)').matches;
 
+    const area = width * height;
+    const rawDpr = window.devicePixelRatio || 1;
+    const targetDpr = isSoftwareGl
+      ? 1
+      : isMobilePerf
+        ? Math.min(rawDpr, area > 340000 ? 1.5 : 1.75)
+        : Math.min(rawDpr, 2);
+
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
       powerPreference: 'high-performance',
@@ -209,12 +248,12 @@ export function Exhibition3D({
     renderer.outputColorSpace = THREE.SRGBColorSpace;
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.toneMappingExposure = 1.0;
-    renderer.setPixelRatio(
-      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
-    );
+    renderer.setPixelRatio(targetDpr);
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = !isSoftwareGl;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = isMobilePerf
+      ? THREE.PCFShadowMap
+      : THREE.PCFSoftShadowMap;
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
@@ -407,6 +446,44 @@ export function Exhibition3D({
       };
     };
 
+    const sharedPlaceholderTex = createSharedPlaceholderTexture(maxAnisotropy);
+    const sharedContactShadowMat = new THREE.MeshBasicMaterial({
+      map: shadowTex,
+      transparent: true,
+      depthWrite: false,
+      opacity: 0.68,
+    });
+    const sharedPlaqueBlankMat = new THREE.MeshStandardMaterial({
+      color: 0xf8f3e6,
+      roughness: 0.72,
+      metalness: 0.04,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
+    const sharedPlaqueBackGeo = new THREE.BoxGeometry(1.04, 0.28, 0.022);
+    const sharedPlaquePlaneGeo = new THREE.PlaneGeometry(1.0, 0.25);
+
+    const maxStageTexDim = isMobilePerf ? 1024 : 1600;
+    const maxConcurrentLoads = isMobilePerf ? 2 : 4;
+    let activeTextureLoads = 0;
+
+    const scheduleNextTextureLoads = () => {
+      if (disposed || activeTextureLoads >= maxConcurrentLoads) return;
+      const focusIdx = activeIndexRef.current;
+      const candidates = frameItems
+        .filter((f) => f.texState === 'idle')
+        .sort(
+          (a, b) =>
+            Math.abs(a.index - focusIdx) - Math.abs(b.index - focusIdx)
+        );
+
+      for (const candidate of candidates) {
+        if (activeTextureLoads >= maxConcurrentLoads) break;
+        candidate.startTextureLoad();
+      }
+    };
+
     artworks.forEach((artwork, index) => {
       const initialAspect = (artwork.widthRatio || 4) / (artwork.heightRatio || 3);
       let metrics = computeFrameMetrics(initialAspect);
@@ -416,12 +493,7 @@ export function Exhibition3D({
 
       const contactShadow = new THREE.Mesh(
         new THREE.PlaneGeometry(metrics.outerWidth + 0.65, 1.15),
-        new THREE.MeshBasicMaterial({
-          map: shadowTex,
-          transparent: true,
-          depthWrite: false,
-          opacity: 0.68,
-        })
+        sharedContactShadowMat
       );
       contactShadow.rotation.x = -Math.PI / 2;
       contactShadow.position.y = 0.005;
@@ -465,7 +537,7 @@ export function Exhibition3D({
         0.022,
         0.022,
         stanchionHeight,
-        12
+        10
       );
       let stanchionX = Math.min(0.42, metrics.outerWidth * 0.24);
 
@@ -497,9 +569,8 @@ export function Exhibition3D({
       matBoard.position.set(0, frameCenterY, 0.036);
       group.add(matBoard);
 
-      const fallbackTex = createFallbackArtworkTexture(artwork, maxAnisotropy);
       const photoMat = new THREE.MeshBasicMaterial({
-        map: fallbackTex,
+        map: sharedPlaceholderTex,
         toneMapped: false,
         fog: false,
       });
@@ -512,27 +583,31 @@ export function Exhibition3D({
       photoMesh.userData.artworkIndex = index;
       group.add(photoMesh);
 
-      const plaqueBack = new THREE.Mesh(
-        new THREE.BoxGeometry(1.04, 0.28, 0.022),
-        darkWalnutMat
-      );
+      const plaqueBack = new THREE.Mesh(sharedPlaqueBackGeo, darkWalnutMat);
       plaqueBack.position.set(0, frameBottomY - 0.17, 0.004);
       group.add(plaqueBack);
 
-      const plaqueTex = createPlaqueTexture(artwork, index + 1, maxAnisotropy);
       const plaqueMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(1.0, 0.25),
-        new THREE.MeshStandardMaterial({
+        sharedPlaquePlaneGeo,
+        sharedPlaqueBlankMat
+      );
+      plaqueMesh.position.set(0, frameBottomY - 0.17, 0.018);
+      group.add(plaqueMesh);
+
+      let plaqueBuilt = false;
+      const ensurePlaque = () => {
+        if (plaqueBuilt || disposed) return;
+        plaqueBuilt = true;
+        const plaqueTex = createPlaqueTexture(artwork, index + 1, maxAnisotropy);
+        plaqueMesh.material = new THREE.MeshStandardMaterial({
           map: plaqueTex,
           roughness: 0.72,
           metalness: 0.04,
           polygonOffset: true,
           polygonOffsetFactor: -1,
           polygonOffsetUnits: -1,
-        })
-      );
-      plaqueMesh.position.set(0, frameBottomY - 0.17, 0.018);
-      group.add(plaqueMesh);
+        });
+      };
 
       const frameItem: CarouselFrameItem = {
         artwork,
@@ -542,121 +617,149 @@ export function Exhibition3D({
         clickTargets: [outerFrame, photoMesh],
         camZAdjust: metrics.camZAdjust,
         lookYAdjust: metrics.lookYAdjust,
-      };
-      frameItems.push(frameItem);
+        ensurePlaque,
+        texState: 'idle',
+        startTextureLoad: () => {
+          if (frameItem.texState !== 'idle' || disposed) return;
+          frameItem.texState = 'loading';
+          activeTextureLoads += 1;
 
-      textureLoader.load(
-        artwork.src,
-        (loadedTex) => {
-          if (disposed) {
-            loadedTex.dispose();
-            return;
-          }
-          loadedTex.colorSpace = THREE.SRGBColorSpace;
-          loadedTex.anisotropy = maxAnisotropy;
-          loadedTex.generateMipmaps = true;
-          loadedTex.minFilter = THREE.LinearMipmapLinearFilter;
-          loadedTex.magFilter = THREE.LinearFilter;
-          photoMat.map = loadedTex;
-          photoMat.needsUpdate = true;
-          fallbackTex.dispose();
-
-          const img = loadedTex.image as
-            | {
-                naturalWidth?: number;
-                naturalHeight?: number;
-                width?: number;
-                height?: number;
+          textureLoader.load(
+            artwork.src,
+            (loadedTex) => {
+              activeTextureLoads = Math.max(0, activeTextureLoads - 1);
+              frameItem.texState = 'done';
+              if (disposed) {
+                loadedTex.dispose();
+                return;
               }
-            | undefined;
-          const natW = img?.naturalWidth || img?.width || 0;
-          const natH = img?.naturalHeight || img?.height || 0;
-          if (natW > 0 && natH > 0) {
-            const naturalAspect = natW / natH;
-            if (Math.abs(naturalAspect - metrics.safeAspect) > 0.012) {
-              metrics = computeFrameMetrics(naturalAspect);
 
-              photoMesh.geometry.dispose();
-              photoMesh.geometry = new THREE.PlaneGeometry(
-                metrics.photoWidth,
-                metrics.photoHeight
-              );
+              const img = loadedTex.image as
+                | {
+                    naturalWidth?: number;
+                    naturalHeight?: number;
+                    width?: number;
+                    height?: number;
+                  }
+                | undefined;
+              const natW = img?.naturalWidth || img?.width || 0;
+              const natH = img?.naturalHeight || img?.height || 0;
 
-              matBoard.geometry.dispose();
-              matBoard.geometry = new THREE.BoxGeometry(
-                metrics.matWidth,
-                metrics.matHeight,
-                0.024
-              );
+              loadedTex.colorSpace = THREE.SRGBColorSpace;
+              loadedTex.anisotropy = maxAnisotropy;
+              loadedTex.generateMipmaps = true;
+              loadedTex.minFilter = THREE.LinearMipmapLinearFilter;
+              loadedTex.magFilter = THREE.LinearFilter;
 
-              outerFrame.geometry.dispose();
-              outerFrame.geometry = new THREE.BoxGeometry(
-                metrics.outerWidth,
-                metrics.outerHeight,
-                0.08
-              );
+              const finalTex =
+                natW > 0 && natH > 0
+                  ? downscaleTextureForStage(
+                      loadedTex,
+                      natW,
+                      natH,
+                      maxStageTexDim,
+                      maxAnisotropy
+                    )
+                  : loadedTex;
 
-              plinthBase.geometry.dispose();
-              plinthBase.geometry = new THREE.BoxGeometry(
-                Math.max(1.05, metrics.outerWidth * 0.64),
-                baseHeight,
-                0.42
-              );
+              photoMat.map = finalTex;
+              photoMat.needsUpdate = true;
 
-              plinthTrim.geometry.dispose();
-              plinthTrim.geometry = new THREE.BoxGeometry(
-                Math.max(1.09, metrics.outerWidth * 0.66),
-                0.028,
-                0.44
-              );
+              if (natW > 0 && natH > 0) {
+                const naturalAspect = natW / natH;
+                if (Math.abs(naturalAspect - metrics.safeAspect) > 0.012) {
+                  metrics = computeFrameMetrics(naturalAspect);
 
-              contactShadow.geometry.dispose();
-              contactShadow.geometry = new THREE.PlaneGeometry(
-                metrics.outerWidth + 0.65,
-                1.15
-              );
+                  photoMesh.geometry.dispose();
+                  photoMesh.geometry = new THREE.PlaneGeometry(
+                    metrics.photoWidth,
+                    metrics.photoHeight
+                  );
 
-              frameBottomY = frameCenterY - metrics.outerHeight / 2;
-              stanchionHeight = Math.max(0.24, frameBottomY - baseHeight);
-              stanchionX = Math.min(0.42, metrics.outerWidth * 0.24);
-              const nextStanchionGeo = new THREE.CylinderGeometry(
-                0.022,
-                0.022,
-                stanchionHeight,
-                12
-              );
-              leftPost.geometry = nextStanchionGeo;
-              rightPost.geometry = nextStanchionGeo;
-              sharedStanchionGeo.dispose();
-              sharedStanchionGeo = nextStanchionGeo;
+                  matBoard.geometry.dispose();
+                  matBoard.geometry = new THREE.BoxGeometry(
+                    metrics.matWidth,
+                    metrics.matHeight,
+                    0.024
+                  );
 
-              leftPost.position.set(
-                -stanchionX,
-                baseHeight + stanchionHeight / 2,
-                -0.02
-              );
-              rightPost.position.set(
-                stanchionX,
-                baseHeight + stanchionHeight / 2,
-                -0.02
-              );
+                  outerFrame.geometry.dispose();
+                  outerFrame.geometry = new THREE.BoxGeometry(
+                    metrics.outerWidth,
+                    metrics.outerHeight,
+                    0.08
+                  );
 
-              plaqueBack.position.y = frameBottomY - 0.17;
-              plaqueMesh.position.y = frameBottomY - 0.17;
+                  plinthBase.geometry.dispose();
+                  plinthBase.geometry = new THREE.BoxGeometry(
+                    Math.max(1.05, metrics.outerWidth * 0.64),
+                    baseHeight,
+                    0.42
+                  );
 
-              frameItem.camZAdjust = metrics.camZAdjust;
-              frameItem.lookYAdjust = metrics.lookYAdjust;
+                  plinthTrim.geometry.dispose();
+                  plinthTrim.geometry = new THREE.BoxGeometry(
+                    Math.max(1.09, metrics.outerWidth * 0.66),
+                    0.028,
+                    0.44
+                  );
+
+                  contactShadow.geometry.dispose();
+                  contactShadow.geometry = new THREE.PlaneGeometry(
+                    metrics.outerWidth + 0.65,
+                    1.15
+                  );
+
+                  frameBottomY = frameCenterY - metrics.outerHeight / 2;
+                  stanchionHeight = Math.max(0.24, frameBottomY - baseHeight);
+                  stanchionX = Math.min(0.42, metrics.outerWidth * 0.24);
+                  const nextStanchionGeo = new THREE.CylinderGeometry(
+                    0.022,
+                    0.022,
+                    stanchionHeight,
+                    10
+                  );
+                  leftPost.geometry = nextStanchionGeo;
+                  rightPost.geometry = nextStanchionGeo;
+                  sharedStanchionGeo.dispose();
+                  sharedStanchionGeo = nextStanchionGeo;
+
+                  leftPost.position.set(
+                    -stanchionX,
+                    baseHeight + stanchionHeight / 2,
+                    -0.02
+                  );
+                  rightPost.position.set(
+                    stanchionX,
+                    baseHeight + stanchionHeight / 2,
+                    -0.02
+                  );
+
+                  plaqueBack.position.y = frameBottomY - 0.17;
+                  plaqueMesh.position.y = frameBottomY - 0.17;
+
+                  frameItem.camZAdjust = metrics.camZAdjust;
+                  frameItem.lookYAdjust = metrics.lookYAdjust;
+                }
+              }
+
+              requestRender();
+              scheduleNextTextureLoads();
+            },
+            undefined,
+            () => {
+              activeTextureLoads = Math.max(0, activeTextureLoads - 1);
+              frameItem.texState = 'done';
+              scheduleNextTextureLoads();
             }
-          }
-
-          requestRender();
+          );
         },
-        undefined,
-        () => {
-          // Keep clean procedural canvas fallback on CORS/load failure
-        }
-      );
+      };
+
+      frameItems.push(frameItem);
     });
+
+    scheduleNextTextureLoads();
 
     let composer: EffectComposer | null = null;
     let dofPass: SubtleDepthOfFieldPass | null = null;
@@ -688,9 +791,9 @@ export function Exhibition3D({
         focus: _camCurrentPos.z - 0.04,
         focusDeadZone: isMobilePerf ? 0.72 : 0.56,
         blurRange: 2.5,
-        maxBlur: width < 640 ? 0.0038 : 0.0052,
-        samples: isMobilePerf ? 6 : 14,
-        depthScale: isMobilePerf ? 0.35 : 0.5,
+        maxBlur: width < 640 ? 0.0036 : 0.0052,
+        samples: isMobilePerf ? 4 : 14,
+        depthScale: isMobilePerf ? 0.25 : 0.5,
         depthHiddenObjects,
       });
       composer.addPass(dofPass);
@@ -711,16 +814,22 @@ export function Exhibition3D({
     let renderDirty = false;
     let isAnimActive = false;
     let lastClockMs = performance.now();
+    let lastScheduledFocus = activeIndexRef.current;
 
     function applyCarouselLayout(offsetValue: number, colorAlpha: number): boolean {
       const slotSpacing = width < 640 ? 2.58 : 2.68;
-      const visibilityCutoff = width < 640 ? 2.65 : 4.0;
+      const visibilityCutoff = width < 640 ? 2.45 : 4.0;
       let colorAnimating = false;
       const nextClickable: THREE.Object3D[] = [];
 
       for (const item of frameItems) {
         const rel = item.index - offsetValue;
         const absRel = Math.abs(rel);
+
+        if (absRel > visibilityCutoff) {
+          item.group.visible = false;
+          continue;
+        }
 
         const x = rel * slotSpacing;
         const z = -Math.pow(absRel, 1.12) * 1.08;
@@ -730,9 +839,8 @@ export function Exhibition3D({
         item.group.position.set(x, 0, z);
         item.group.rotation.y = rotY;
         item.group.scale.setScalar(scale);
-
-        item.group.visible = absRel <= visibilityCutoff;
-        if (!item.group.visible) continue;
+        item.group.visible = true;
+        item.ensurePlaque();
 
         nextClickable.push(item.clickTargets[0], item.clickTargets[1]);
 
@@ -759,6 +867,11 @@ export function Exhibition3D({
             item.accentMat.emissive.copy(targetEmissive);
           }
         }
+      }
+
+      if (activeIndexRef.current !== lastScheduledFocus) {
+        lastScheduledFocus = activeIndexRef.current;
+        scheduleNextTextureLoads();
       }
 
       visibleClickableMeshes = nextClickable;
@@ -1073,6 +1186,12 @@ export function Exhibition3D({
       outputPass?.dispose();
       composer?.dispose();
       disposeObject3D(scene);
+      sharedPlaceholderTex.dispose();
+      sharedContactShadowMat.dispose();
+      sharedPlaqueBlankMat.dispose();
+      sharedPlaqueBackGeo.dispose();
+      sharedPlaquePlaneGeo.dispose();
+      shadowTex.dispose();
       envTarget.dispose();
       renderer.dispose();
       if (renderer.domElement.parentNode === container) {
@@ -1080,6 +1199,29 @@ export function Exhibition3D({
       }
     };
   }, [artworks, isLoading]);
+
+  const swiperModules = useMemo(() => [FreeMode, Keyboard, Mousewheel], []);
+  const freeModeConfig = useMemo(
+    () => ({
+      enabled: true,
+      momentum: true,
+      momentumRatio: 0.9,
+      momentumVelocityRatio: 0.9,
+      momentumBounce: true,
+      momentumBounceRatio: 0.7,
+      minimumVelocity: 0.02,
+      sticky: true,
+    }),
+    []
+  );
+  const keyboardConfig = useMemo(
+    () => ({ enabled: !isModalOpen }),
+    [isModalOpen]
+  );
+  const mousewheelConfig = useMemo(
+    () => ({ forceToAxis: true, sensitivity: 1 }),
+    []
+  );
 
   if (isLoading) {
     return (
@@ -1191,27 +1333,17 @@ export function Exhibition3D({
         }}
       >
         <Swiper
-          modules={[FreeMode, Keyboard, Mousewheel]}
+          modules={swiperModules}
           slidesPerView={1}
           speed={480}
-          freeMode={{
-            enabled: true,
-            momentum: true,
-            momentumRatio: 0.9,
-            momentumVelocityRatio: 0.9,
-            momentumBounce: true,
-            momentumBounceRatio: 0.7,
-            minimumVelocity: 0.02,
-            sticky: true,
-          }}
+          freeMode={freeModeConfig}
           threshold={5}
           touchAngle={45}
           resistance={true}
           resistanceRatio={0.65}
-          watchSlidesProgress={true}
           simulateTouch={true}
-          keyboard={{ enabled: !isModalOpen }}
-          mousewheel={{ forceToAxis: true, sensitivity: 1 }}
+          keyboard={keyboardConfig}
+          mousewheel={mousewheelConfig}
           className="w-full h-full"
           onSwiper={(swiper) => {
             swiperRef.current = swiper;

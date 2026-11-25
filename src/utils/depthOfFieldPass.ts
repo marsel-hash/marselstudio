@@ -77,7 +77,13 @@ const SubtleDOFShader = {
 
     void main() {
       vec4 baseColor = texture2D(tColor, vUv);
-      float centerViewZ = getViewZ(vUv);
+      float packedDepth = unpackRGBAToDepth(texture2D(tDepth, vUv));
+      if (packedDepth > 0.9995) {
+        gl_FragColor = baseColor;
+        return;
+      }
+
+      float centerViewZ = perspectiveDepthToViewZ(packedDepth, nearClip, farClip);
       float centerCoc = computeCoc(centerViewZ);
 
       // Keep focused center artwork and foreground frame edges razor sharp
@@ -125,6 +131,7 @@ export class SubtleDepthOfFieldPass extends Pass {
   private materialDof: ShaderMaterial;
   private fsQuad: FullScreenQuad;
   private oldClearColor = new Color();
+  private prevVisibility: boolean[] = [];
 
   public uniforms: typeof SubtleDOFShader.uniforms;
 
@@ -138,6 +145,7 @@ export class SubtleDepthOfFieldPass extends Pass {
     this.scene = scene;
     this.camera = camera;
     this.depthHiddenObjects = options.depthHiddenObjects ?? [];
+    this.prevVisibility = new Array<boolean>(this.depthHiddenObjects.length).fill(false);
     this.depthScale = options.depthScale ?? 0.5;
     const sampleCount = Math.max(4, Math.min(16, Math.round(options.samples ?? 12)));
 
@@ -187,10 +195,15 @@ export class SubtleDepthOfFieldPass extends Pass {
     const prevOverride = this.scene.overrideMaterial;
     const prevBackground = this.scene.background;
     const prevFog = this.scene.fog;
-    const prevVisibility = this.depthHiddenObjects.map((obj) => obj.visible);
+    const hiddenLen = this.depthHiddenObjects.length;
 
-    for (const obj of this.depthHiddenObjects) {
-      obj.visible = false;
+    for (let i = 0; i < hiddenLen; i++) {
+      const obj = this.depthHiddenObjects[i];
+      const wasVisible = obj.visible;
+      this.prevVisibility[i] = wasVisible;
+      if (wasVisible) {
+        obj.visible = false;
+      }
     }
 
     this.scene.background = null;
@@ -210,8 +223,10 @@ export class SubtleDepthOfFieldPass extends Pass {
     this.scene.overrideMaterial = prevOverride;
     this.scene.background = prevBackground;
     this.scene.fog = prevFog;
-    for (let i = 0; i < this.depthHiddenObjects.length; i++) {
-      this.depthHiddenObjects[i].visible = prevVisibility[i];
+    for (let i = 0; i < hiddenLen; i++) {
+      if (this.prevVisibility[i]) {
+        this.depthHiddenObjects[i].visible = true;
+      }
     }
 
     renderer.setClearColor(this.oldClearColor, oldClearAlpha);
