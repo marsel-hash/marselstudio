@@ -188,6 +188,8 @@ export function Exhibition3D({
 
     let width = Math.max(container.clientWidth, 300);
     let height = Math.max(container.clientHeight, 440);
+    const isMobilePerf =
+      width < 768 || window.matchMedia('(pointer: coarse)').matches;
 
     const renderer = new THREE.WebGLRenderer({
       antialias: !isSoftwareGl,
@@ -197,7 +199,9 @@ export function Exhibition3D({
     renderer.toneMapping = THREE.NoToneMapping;
     renderer.toneMappingExposure = 1.0;
     renderer.setPixelRatio(
-      isSoftwareGl ? 1 : Math.min(window.devicePixelRatio || 1, 2)
+      isSoftwareGl
+        ? 1
+        : Math.min(window.devicePixelRatio || 1, isMobilePerf ? 1.5 : 2)
     );
     renderer.setSize(width, height);
     renderer.shadowMap.enabled = !isSoftwareGl;
@@ -224,9 +228,12 @@ export function Exhibition3D({
 
     const getResponsiveCamBase = (w: number, h: number) => {
       const aspect = w / h;
-      const baseZ = aspect < 0.72 ? 4.85 : aspect < 1.0 ? 4.25 : 3.72;
-      const baseY = aspect < 0.8 ? 1.48 : 1.54;
-      const lookY = aspect < 0.8 ? 1.28 : 1.35;
+      const baseZ =
+        aspect < 1.0
+          ? Math.min(7.5, Math.max(3.9, 3.65 / Math.max(0.45, aspect)))
+          : 3.82;
+      const baseY = aspect < 0.85 ? 1.56 : 1.54;
+      const lookY = aspect < 0.85 ? 1.24 : 1.35;
       return { baseZ, baseY, lookY, viewportAspect: aspect };
     };
 
@@ -244,7 +251,8 @@ export function Exhibition3D({
     keyLight.position.set(3.2, 6.8, 5.4);
     if (!isSoftwareGl) {
       keyLight.castShadow = true;
-      keyLight.shadow.mapSize.set(1024, 1024);
+      const shadowRes = isMobilePerf ? 512 : 1024;
+      keyLight.shadow.mapSize.set(shadowRes, shadowRes);
       keyLight.shadow.camera.near = 0.5;
       keyLight.shadow.camera.far = 22;
       keyLight.shadow.camera.left = -7;
@@ -260,7 +268,9 @@ export function Exhibition3D({
     rimLight.position.set(-4.2, 3.6, -4.5);
     scene.add(rimLight);
 
-    const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
+    const maxAnisotropy = isMobilePerf
+      ? Math.min(4, renderer.capabilities.getMaxAnisotropy())
+      : renderer.capabilities.getMaxAnisotropy();
     const shadowTex = createContactShadowTexture();
     const textureLoader = new THREE.TextureLoader();
     textureLoader.setCrossOrigin('anonymous');
@@ -632,9 +642,10 @@ export function Exhibition3D({
       renderer.compile(scene, camera);
 
       const pixelRatio = renderer.getPixelRatio();
-      const msaaSamples = renderer.capabilities.isWebGL2
-        ? Math.min(4, renderer.capabilities.maxSamples)
-        : 0;
+      const msaaSamples =
+        !isMobilePerf && renderer.capabilities.isWebGL2
+          ? Math.min(4, renderer.capabilities.maxSamples)
+          : 0;
       const msaaTarget = new THREE.WebGLRenderTarget(
         Math.max(1, Math.floor(width * pixelRatio)),
         Math.max(1, Math.floor(height * pixelRatio)),
@@ -652,9 +663,11 @@ export function Exhibition3D({
 
       dofPass = new SubtleDepthOfFieldPass(scene, camera, {
         focus: _camCurrentPos.z - 0.04,
-        focusDeadZone: 0.56,
+        focusDeadZone: isMobilePerf ? 0.68 : 0.56,
         blurRange: 2.5,
-        maxBlur: width < 640 ? 0.0042 : 0.0052,
+        maxBlur: width < 640 ? 0.0038 : 0.0052,
+        samples: isMobilePerf ? 8 : 14,
+        depthScale: isMobilePerf ? 0.35 : 0.5,
         depthHiddenObjects,
       });
       composer.addPass(dofPass);
@@ -673,10 +686,12 @@ export function Exhibition3D({
     let frameId = 0;
     let renderBusy = false;
     let renderDirty = false;
+    let isAnimActive = false;
     let lastClockMs = performance.now();
 
     function applyCarouselLayout(offsetValue: number, colorAlpha: number): boolean {
-      const slotSpacing = width < 640 ? 2.48 : 2.68;
+      const slotSpacing = width < 640 ? 2.58 : 2.68;
+      const visibilityCutoff = width < 640 ? 2.65 : 4.0;
       let colorAnimating = false;
       const nextClickable: THREE.Object3D[] = [];
 
@@ -693,7 +708,7 @@ export function Exhibition3D({
         item.group.rotation.y = rotY;
         item.group.scale.setScalar(scale);
 
-        item.group.visible = absRel <= 4.2;
+        item.group.visible = absRel <= visibilityCutoff;
         if (!item.group.visible) continue;
 
         nextClickable.push(item.clickTargets[0], item.clickTargets[1]);
@@ -774,27 +789,31 @@ export function Exhibition3D({
         renderDirty = true;
         return;
       }
+      if (!isAnimActive) {
+        lastClockMs = performance.now();
+        isAnimActive = true;
+      }
       renderBusy = true;
       frameId = requestAnimationFrame(() => {
         if (disposed) return;
         renderDirty = false;
 
         const now = performance.now();
-        const delta = Math.min((now - lastClockMs) / 1000, 0.08);
+        const delta = Math.max(0.001, Math.min((now - lastClockMs) / 1000, 0.05));
         lastClockMs = now;
 
         const goalOffset = targetOffsetRef.current;
         if (prefersReducedMotion || isSoftwareGl) {
           currentOffset = goalOffset;
         } else if (isTouchingRef.current) {
-          // Responsive finger tracking with micro-smoothing
-          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 22, delta);
+          // Snappy 1:1 thumb tracking during Swiper touch gesture
+          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 32, delta);
           if (Math.abs(currentOffset - goalOffset) > 0.0008) {
             renderDirty = true;
           }
         } else {
           // Smooth exponential glide when settling to a slide
-          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 6.4, delta);
+          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 7.0, delta);
           if (Math.abs(currentOffset - goalOffset) < 0.0008) {
             currentOffset = goalOffset;
           } else {
@@ -825,7 +844,7 @@ export function Exhibition3D({
 
         const camBase = getResponsiveCamBase(width, height);
         const framing = getInterpolatedFraming(currentOffset);
-        const aspectPullbackScale = camBase.viewportAspect < 0.85 ? 1.15 : 0.65;
+        const aspectPullbackScale = camBase.viewportAspect < 0.85 ? 0.85 : 0.65;
 
         const deltaOffset = goalOffset - currentOffset;
         const travelIntensity = Math.min(1, Math.abs(deltaOffset) * 1.15);
@@ -833,10 +852,10 @@ export function Exhibition3D({
           Math.min(1, Math.abs(currentOffset - Math.round(currentOffset)) * 2) *
             (Math.PI * 0.5)
         );
-        const arcPullback = Math.max(travelIntensity * 0.42, midSlideGap * 0.28);
+        const arcPullback = Math.max(travelIntensity * 0.34, midSlideGap * 0.22);
 
-        const swipeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.22, -0.32, 0.32);
-        const gazeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.16, -0.24, 0.24);
+        const swipeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.2, -0.3, 0.3);
+        const gazeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.15, -0.22, 0.22);
 
         _camTargetPos.set(
           smoothParallaxX * 0.34 + swipeLeadX,
@@ -897,7 +916,7 @@ export function Exhibition3D({
 
         if (composer && dofPass) {
           dofPass.setFocus(Math.max(1.5, _camCurrentPos.z - 0.04));
-          dofPass.uniforms.maxBlur.value = width < 640 ? 0.0042 : 0.0052;
+          dofPass.uniforms.maxBlur.value = width < 640 ? 0.0038 : 0.0052;
           composer.render();
         } else {
           renderer.render(scene, camera);
@@ -907,6 +926,8 @@ export function Exhibition3D({
           renderBusy = false;
           if (renderDirty && !disposed) {
             requestRender();
+          } else {
+            isAnimActive = false;
           }
         };
         if (isSoftwareGl) {
@@ -918,7 +939,6 @@ export function Exhibition3D({
     }
 
     requestRenderRef.current = () => {
-      lastClockMs = performance.now();
       requestRender();
     };
 

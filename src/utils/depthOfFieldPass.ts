@@ -21,11 +21,16 @@ export interface SubtleDepthOfFieldOptions {
   focusDeadZone?: number;
   blurRange?: number;
   maxBlur?: number;
+  samples?: number;
+  depthScale?: number;
   depthHiddenObjects?: Object3D[];
 }
 
 const SubtleDOFShader = {
   name: 'SubtleDOFShader',
+  defines: {
+    DOF_SAMPLES: 12,
+  },
   uniforms: {
     tColor: { value: null as Texture | null },
     tDepth: { value: null as Texture | null },
@@ -87,9 +92,9 @@ const SubtleDOFShader = {
       vec4 accum = baseColor;
       float totalWeight = 1.0;
 
-      for (int i = 0; i < 16; i++) {
+      for (int i = 0; i < DOF_SAMPLES; i++) {
         float fi = float(i);
-        float r = sqrt((fi + 0.5) / 16.0);
+        float r = sqrt((fi + 0.5) / float(DOF_SAMPLES));
         float theta = fi * GOLDEN_ANGLE;
         vec2 offset = vec2(cos(theta), sin(theta)) * r * radius;
         vec2 sampleUv = clamp(vUv + offset, vec2(0.001), vec2(0.999));
@@ -114,6 +119,7 @@ export class SubtleDepthOfFieldPass extends Pass {
   private scene: Scene;
   private camera: Camera;
   private depthHiddenObjects: Object3D[];
+  private depthScale: number;
   private renderTargetDepth: WebGLRenderTarget;
   private materialDepth: MeshDepthMaterial;
   private materialDof: ShaderMaterial;
@@ -132,6 +138,8 @@ export class SubtleDepthOfFieldPass extends Pass {
     this.scene = scene;
     this.camera = camera;
     this.depthHiddenObjects = options.depthHiddenObjects ?? [];
+    this.depthScale = options.depthScale ?? 0.5;
+    const sampleCount = Math.max(4, Math.min(16, Math.round(options.samples ?? 12)));
 
     this.renderTargetDepth = new WebGLRenderTarget(1, 1, {
       minFilter: NearestFilter,
@@ -156,6 +164,9 @@ export class SubtleDepthOfFieldPass extends Pass {
         : 1.0;
 
     this.materialDof = new ShaderMaterial({
+      defines: {
+        DOF_SAMPLES: sampleCount,
+      },
       uniforms,
       vertexShader: SubtleDOFShader.vertexShader,
       fragmentShader: SubtleDOFShader.fragmentShader,
@@ -229,10 +240,10 @@ export class SubtleDepthOfFieldPass extends Pass {
     const safeW = Math.max(1, Math.floor(width));
     const safeH = Math.max(1, Math.floor(height));
     this.uniforms.aspect.value = safeW / safeH;
-    // Half-resolution depth buffer keeps mobile GPU overhead minimal
+    // Scaled depth buffer keeps mobile GPU overhead minimal
     this.renderTargetDepth.setSize(
-      Math.max(1, Math.floor(safeW * 0.5)),
-      Math.max(1, Math.floor(safeH * 0.5))
+      Math.max(1, Math.floor(safeW * this.depthScale)),
+      Math.max(1, Math.floor(safeH * this.depthScale))
     );
   }
 
