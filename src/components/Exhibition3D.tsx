@@ -224,7 +224,19 @@ export function Exhibition3D({
     roomEnv.dispose();
     pmremGenerator.dispose();
 
-    const camera = new THREE.PerspectiveCamera(40, width / height, 0.1, 60);
+    const getResponsiveFov = (w: number, h: number) => {
+      const aspect = w / h;
+      if (aspect < 0.78) return 50;
+      if (w < 768 || aspect < 1.0) return 46;
+      return 40;
+    };
+
+    const camera = new THREE.PerspectiveCamera(
+      getResponsiveFov(width, height),
+      width / height,
+      0.1,
+      60
+    );
 
     const getResponsiveCamBase = (w: number, h: number) => {
       const aspect = w / h;
@@ -1017,6 +1029,7 @@ export function Exhibition3D({
       if (!container || disposed) return;
       width = Math.max(container.clientWidth, 300);
       height = Math.max(container.clientHeight, 440);
+      camera.fov = getResponsiveFov(width, height);
       camera.aspect = width / height;
       camera.updateProjectionMatrix();
       renderer.setSize(width, height);
