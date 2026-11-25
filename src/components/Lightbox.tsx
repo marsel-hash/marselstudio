@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronLeft, ChevronRight, ImageOff, X } from 'lucide-react';
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Mousewheel } from 'swiper/modules';
+import type { Swiper as SwiperInstance } from 'swiper';
+import 'swiper/css';
 import type { Artwork } from '../types/gallery';
 import {
   isImagePreloaded,
@@ -15,6 +19,84 @@ interface LightboxProps {
   onChangeIndex: (nextIndex: number) => void;
 }
 
+interface LightboxSlideProps {
+  artwork: Artwork;
+  shouldMountImage: boolean;
+  isCurrent: boolean;
+}
+
+function LightboxSlide({
+  artwork,
+  shouldMountImage,
+  isCurrent,
+}: LightboxSlideProps) {
+  const [imgError, setImgError] = useState(false);
+  const [isReady, setIsReady] = useState(() => isImagePreloaded(artwork.src));
+  const imgRef = useRef<HTMLImageElement | null>(null);
+  const prevSrcRef = useRef(artwork.src);
+
+  useEffect(() => {
+    if (prevSrcRef.current !== artwork.src) {
+      prevSrcRef.current = artwork.src;
+      setImgError(false);
+      setIsReady(isImagePreloaded(artwork.src));
+    }
+
+    const imgEl = imgRef.current;
+    if (shouldMountImage && imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
+      markImagePreloaded(artwork.src);
+      setIsReady(true);
+    }
+  }, [artwork.src, shouldMountImage]);
+
+  return (
+    <div className="w-full h-full flex items-center justify-center px-3 sm:px-16 py-2">
+      {!shouldMountImage ? (
+        <div
+          className="w-64 sm:w-80 max-h-[55dvh] sm:max-h-[68dvh] bg-[#F8F3E6] p-2.5 sm:p-3.5 border border-[#221B15]/20 shadow-[6px_6px_0px_rgba(34,27,21,0.12)] rounded-[2px]"
+          style={{
+            aspectRatio: `${artwork.widthRatio || 4} / ${artwork.heightRatio || 3}`,
+          }}
+        >
+          <div
+            className="w-full h-full"
+            style={{
+              backgroundImage: `linear-gradient(155deg, ${artwork.placeholderFrom} 0%, ${artwork.placeholderTo} 100%)`,
+            }}
+          />
+        </div>
+      ) : !imgError ? (
+        <div className="p-2 sm:p-3.5 bg-[#F8F3E6] border border-[#221B15]/25 shadow-[6px_6px_0px_rgba(34,27,21,0.16)] rounded-[2px]">
+          <img
+            ref={imgRef}
+            src={artwork.src}
+            alt={`${artwork.title} — ${artwork.medium}`}
+            decoding="async"
+            fetchPriority={isCurrent ? 'high' : 'auto'}
+            draggable={false}
+            referrerPolicy="no-referrer"
+            onLoad={() => {
+              markImagePreloaded(artwork.src);
+              setIsReady(true);
+            }}
+            onError={() => setImgError(true)}
+            className={`max-h-[56dvh] sm:max-h-[68dvh] w-auto max-w-full object-contain ring-1 ring-inset ring-[#221B15]/15 transition-opacity duration-200 select-none ${
+              isReady ? 'opacity-100' : 'opacity-95'
+            }`}
+          />
+        </div>
+      ) : (
+        <div className="w-72 h-72 flex flex-col items-center justify-center bg-[#E3D7BE] border border-[#221B15]/25 text-[#635443] p-6 text-center rounded-[2px]">
+          <ImageOff className="w-6 h-6 mb-2 opacity-60" aria-hidden="true" />
+          <span className="font-serif-editorial text-lg text-[#221B15]">
+            {artwork.title}
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function Lightbox({
   artworks,
   currentIndex,
@@ -24,45 +106,52 @@ export function Lightbox({
   const isOpen = currentIndex !== null && artworks[currentIndex] !== undefined;
   const artwork = isOpen ? artworks[currentIndex] : null;
 
-  const [dragOffsetX, setDragOffsetX] = useState(0);
-  const [dragOffsetY, setDragOffsetY] = useState(0);
-  const [isDragging, setIsDragging] = useState(false);
-  const [imgError, setImgError] = useState(false);
-  const [isCurrentReady, setIsCurrentReady] = useState(false);
+  const swiperRef = useRef<SwiperInstance | null>(null);
+  const backdropRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
 
-  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
-  const swipeAxisRef = useRef<'x' | 'y' | null>(null);
-  const imgRef = useRef<HTMLImageElement | null>(null);
-  const artworkSrc = artwork?.src ?? '';
-  const prevSrcRef = useRef(artworkSrc);
+  const touchStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+  const verticalDragActiveRef = useRef(false);
+  const lastDragYRef = useRef(0);
 
   const goPrev = useCallback(() => {
     if (currentIndex === null || artworks.length <= 1) return;
+    const swiper = swiperRef.current;
+    if (swiper) {
+      if (currentIndex <= 0) {
+        swiper.slideTo(artworks.length - 1);
+      } else {
+        swiper.slidePrev();
+      }
+      return;
+    }
     const prevIdx = (currentIndex - 1 + artworks.length) % artworks.length;
     onChangeIndex(prevIdx);
   }, [currentIndex, artworks.length, onChangeIndex]);
 
   const goNext = useCallback(() => {
     if (currentIndex === null || artworks.length <= 1) return;
+    const swiper = swiperRef.current;
+    if (swiper) {
+      if (currentIndex >= artworks.length - 1) {
+        swiper.slideTo(0);
+      } else {
+        swiper.slideNext();
+      }
+      return;
+    }
     const nextIdx = (currentIndex + 1) % artworks.length;
     onChangeIndex(nextIdx);
   }, [currentIndex, artworks.length, onChangeIndex]);
 
+  // Keep Swiper synchronized if currentIndex updates from outside (keys/buttons)
   useEffect(() => {
-    if (prevSrcRef.current !== artworkSrc) {
-      prevSrcRef.current = artworkSrc;
-      setImgError(false);
-      setDragOffsetX(0);
-      setDragOffsetY(0);
-      setIsCurrentReady(artworkSrc ? isImagePreloaded(artworkSrc) : false);
+    if (!isOpen || currentIndex === null) return;
+    const swiper = swiperRef.current;
+    if (swiper && swiper.activeIndex !== currentIndex) {
+      swiper.slideTo(currentIndex, 340);
     }
-
-    const imgEl = imgRef.current;
-    if (artworkSrc && imgEl && imgEl.complete && imgEl.naturalWidth > 0) {
-      markImagePreloaded(artworkSrc);
-      setIsCurrentReady(true);
-    }
-  }, [artworkSrc]);
+  }, [isOpen, currentIndex]);
 
   // Smart bidirectional preloading (+1, -1 immediately; +2 on idle)
   useEffect(() => {
@@ -121,9 +210,17 @@ export function Lightbox({
     touchStartRef.current = {
       x: e.touches[0].clientX,
       y: e.touches[0].clientY,
+      time: performance.now(),
     };
-    swipeAxisRef.current = null;
-    setIsDragging(true);
+    verticalDragActiveRef.current = false;
+    lastDragYRef.current = 0;
+
+    if (stageRef.current) {
+      stageRef.current.style.transition = 'none';
+    }
+    if (backdropRef.current) {
+      backdropRef.current.style.transition = 'none';
+    }
   };
 
   const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
@@ -131,34 +228,61 @@ export function Lightbox({
     const dx = e.touches[0].clientX - touchStartRef.current.x;
     const dy = e.touches[0].clientY - touchStartRef.current.y;
 
-    if (!swipeAxisRef.current && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) {
-      swipeAxisRef.current = Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y';
+    if (
+      !verticalDragActiveRef.current &&
+      dy > 14 &&
+      Math.abs(dx) < 18 &&
+      Math.abs(dy) > Math.abs(dx) * 1.35
+    ) {
+      verticalDragActiveRef.current = true;
+      if (swiperRef.current) {
+        swiperRef.current.allowTouchMove = false;
+      }
     }
 
-    if (swipeAxisRef.current === 'x') {
-      setDragOffsetX(dx);
-    } else if (swipeAxisRef.current === 'y' && dy > 0) {
-      setDragOffsetY(dy);
+    if (verticalDragActiveRef.current && dy > 0) {
+      lastDragYRef.current = dy;
+      if (stageRef.current) {
+        const scale = Math.max(0.9, 1 - dy / 1800);
+        stageRef.current.style.transform = `translate3d(0, ${dy}px, 0) scale(${scale})`;
+      }
+      if (backdropRef.current) {
+        backdropRef.current.style.opacity = String(Math.max(0.45, 1 - dy / 380));
+      }
     }
   };
 
   const handleTouchEnd = () => {
-    setIsDragging(false);
-
-    if (swipeAxisRef.current === 'x') {
-      if (dragOffsetX < -48) {
-        goNext();
-      } else if (dragOffsetX > 48) {
-        goPrev();
-      }
-    } else if (swipeAxisRef.current === 'y' && dragOffsetY > 90) {
-      onClose();
-    }
+    const start = touchStartRef.current;
+    const dy = lastDragYRef.current;
+    const wasVertical = verticalDragActiveRef.current;
 
     touchStartRef.current = null;
-    swipeAxisRef.current = null;
-    setDragOffsetX(0);
-    setDragOffsetY(0);
+    verticalDragActiveRef.current = false;
+    lastDragYRef.current = 0;
+
+    if (swiperRef.current) {
+      swiperRef.current.allowTouchMove = true;
+    }
+
+    if (wasVertical) {
+      const elapsed = start ? Math.max(1, performance.now() - start.time) : 300;
+      const velocity = dy / elapsed;
+      if (dy > 90 || (dy > 42 && velocity > 0.45)) {
+        onClose();
+        return;
+      }
+    }
+
+    if (stageRef.current) {
+      stageRef.current.style.transition =
+        'transform 240ms cubic-bezier(0.16, 1, 0.3, 1)';
+      stageRef.current.style.transform = 'translate3d(0, 0, 0) scale(1)';
+    }
+    if (backdropRef.current) {
+      backdropRef.current.style.transition = 'opacity 200ms ease-out';
+      backdropRef.current.style.opacity = '1';
+    }
   };
 
   const formattedIndex = String(currentIndex + 1).padStart(2, '0');
@@ -166,14 +290,11 @@ export function Lightbox({
 
   return (
     <div
+      ref={backdropRef}
       role="dialog"
       aria-modal="true"
       aria-label={`Artwork details: ${artwork.title}`}
-      className="fixed inset-0 z-50 bg-[#EFE6D2]/[0.98] backdrop-blur-sm flex flex-col justify-between select-none"
-      style={{
-        opacity: Math.max(0.45, 1 - dragOffsetY / 360),
-        transition: isDragging ? 'none' : 'opacity 180ms ease-out',
-      }}
+      className="fixed inset-0 z-50 bg-[#EFE6D2] flex flex-col justify-between select-none touch-pan-y"
     >
       {/* Top Bar */}
       <div className="h-14 px-4 sm:px-8 flex items-center justify-between shrink-0 border-b border-[#221B15]/15">
@@ -192,69 +313,71 @@ export function Lightbox({
         </button>
       </div>
 
-      {/* Main Artwork Stage (Swipeable on mobile) */}
+      {/* Main Artwork Stage (Native-Feel Touch Carousel Powered by Swiper) */}
       <div
-        className="relative flex-1 min-h-0 flex items-center justify-center px-4 sm:px-16 py-2 touch-pan-y"
+        ref={stageRef}
+        className="relative flex-1 min-h-0 flex items-center justify-center touch-pan-y will-change-transform"
         onTouchStart={handleTouchStart}
         onTouchMove={handleTouchMove}
         onTouchEnd={handleTouchEnd}
+        onTouchCancel={handleTouchEnd}
       >
         {artworks.length > 1 && (
           <button
             type="button"
             onClick={goPrev}
             aria-label="Previous photo"
-            className="hidden sm:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/80 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
+            className="hidden sm:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 z-10 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/90 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
           >
             <ChevronLeft className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
           </button>
         )}
 
-        <div
-          className="relative max-w-full max-h-full flex items-center justify-center"
-          style={{
-            transform: `translate3d(${dragOffsetX}px, ${dragOffsetY}px, 0)`,
-            transition: isDragging
-              ? 'none'
-              : 'transform 220ms cubic-bezier(0.16, 1, 0.3, 1)',
+        <Swiper
+          modules={[Mousewheel]}
+          initialSlide={currentIndex}
+          slidesPerView={1}
+          spaceBetween={18}
+          speed={360}
+          threshold={5}
+          touchAngle={42}
+          longSwipesRatio={0.18}
+          shortSwipes={true}
+          followFinger={true}
+          resistance={true}
+          resistanceRatio={0.7}
+          mousewheel={{ forceToAxis: true, sensitivity: 1 }}
+          className="w-full h-full"
+          onSwiper={(swiper) => {
+            swiperRef.current = swiper;
+          }}
+          onSlideChange={(swiper) => {
+            const nextIdx = Math.max(
+              0,
+              Math.min(artworks.length - 1, swiper.activeIndex)
+            );
+            if (nextIdx !== currentIndex) {
+              onChangeIndex(nextIdx);
+            }
           }}
         >
-          {!imgError ? (
-            <div className="p-2.5 sm:p-3.5 bg-[#F8F3E6] border border-[#221B15]/25 shadow-[6px_6px_0px_rgba(34,27,21,0.16)] rounded-[2px]">
-              <img
-                ref={imgRef}
-                key={artwork.id}
-                src={artwork.src}
-                alt={`${artwork.title} — ${artwork.medium}`}
-                decoding="async"
-                fetchPriority="high"
-                referrerPolicy="no-referrer"
-                onLoad={() => {
-                  markImagePreloaded(artwork.src);
-                  setIsCurrentReady(true);
-                }}
-                onError={() => setImgError(true)}
-                className={`max-h-[55dvh] sm:max-h-[68dvh] w-auto max-w-full object-contain ring-1 ring-inset ring-[#221B15]/15 transition-opacity duration-200 ${
-                  isCurrentReady ? 'opacity-100' : 'opacity-95'
-                }`}
+          {artworks.map((item, idx) => (
+            <SwiperSlide key={item.id} className="w-full h-full">
+              <LightboxSlide
+                artwork={item}
+                shouldMountImage={Math.abs(idx - currentIndex) <= 2}
+                isCurrent={idx === currentIndex}
               />
-            </div>
-          ) : (
-            <div className="w-72 h-72 flex flex-col items-center justify-center bg-[#E3D7BE] border border-[#221B15]/25 text-[#635443] p-6 text-center rounded-[2px]">
-              <ImageOff className="w-6 h-6 mb-2 opacity-60" aria-hidden="true" />
-              <span className="font-serif-editorial text-lg text-[#221B15]">
-                {artwork.title}
-              </span>
-            </div>
-          )}
-        </div>
+            </SwiperSlide>
+          ))}
+        </Swiper>
 
         {artworks.length > 1 && (
           <button
             type="button"
             onClick={goNext}
             aria-label="Next photo"
-            className="hidden sm:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/80 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
+            className="hidden sm:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 z-10 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/90 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
           >
             <ChevronRight className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
           </button>

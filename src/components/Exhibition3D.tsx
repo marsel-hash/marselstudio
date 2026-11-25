@@ -5,9 +5,10 @@ import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 import { Swiper, SwiperSlide } from 'swiper/react';
-import { Keyboard, Mousewheel } from 'swiper/modules';
+import { FreeMode, Keyboard, Mousewheel } from 'swiper/modules';
 import type { Swiper as SwiperInstance } from 'swiper';
 import 'swiper/css';
+import 'swiper/css/free-mode';
 import {
   ChevronDown,
   ChevronLeft,
@@ -1190,13 +1191,21 @@ export function Exhibition3D({
         }}
       >
         <Swiper
-          modules={[Keyboard, Mousewheel]}
+          modules={[FreeMode, Keyboard, Mousewheel]}
           slidesPerView={1}
-          speed={560}
-          threshold={6}
+          speed={480}
+          freeMode={{
+            enabled: true,
+            momentum: true,
+            momentumRatio: 0.9,
+            momentumVelocityRatio: 0.9,
+            momentumBounce: true,
+            momentumBounceRatio: 0.7,
+            minimumVelocity: 0.02,
+            sticky: true,
+          }}
+          threshold={5}
           touchAngle={45}
-          longSwipesRatio={0.22}
-          shortSwipes={true}
           resistance={true}
           resistanceRatio={0.65}
           watchSlidesProgress={true}
@@ -1210,37 +1219,45 @@ export function Exhibition3D({
           onTouchStart={() => {
             isTouchingRef.current = true;
           }}
-          onTouchEnd={(swiper) => {
+          onTouchEnd={() => {
             isTouchingRef.current = false;
-            const idx = Math.max(
-              0,
-              Math.min(artworksRef.current.length - 1, swiper.activeIndex)
-            );
-            targetOffsetRef.current = idx;
             requestRenderRef.current?.();
           }}
           onProgress={(_swiper, progress) => {
-            if (!isTouchingRef.current) return;
             const count = artworksRef.current.length;
+            const rawOffset = count <= 1 ? 0 : progress * (count - 1);
             targetOffsetRef.current =
-              count <= 1 ? 0 : progress * (count - 1);
+              count <= 1
+                ? 0
+                : THREE.MathUtils.clamp(rawOffset, -0.14, count - 1 + 0.14);
+
+            if (count > 0) {
+              const nearestIdx = Math.max(
+                0,
+                Math.min(count - 1, Math.round(rawOffset))
+              );
+              if (nearestIdx !== activeIndexRef.current) {
+                activeIndexRef.current = nearestIdx;
+                setActiveIndex(nearestIdx);
+              }
+            }
             requestRenderRef.current?.();
           }}
           onSlideChange={(swiper) => {
-            const idx = Math.max(
-              0,
-              Math.min(artworksRef.current.length - 1, swiper.activeIndex)
-            );
+            const count = artworksRef.current.length;
+            const idx = Math.max(0, Math.min(count - 1, swiper.activeIndex));
             activeIndexRef.current = idx;
             setActiveIndex(idx);
-            targetOffsetRef.current = idx;
+            if (!isTouchingRef.current && !swiper.animating) {
+              targetOffsetRef.current = idx;
+            }
             requestRenderRef.current?.();
           }}
           onTransitionEnd={(swiper) => {
-            const idx = Math.max(
-              0,
-              Math.min(artworksRef.current.length - 1, swiper.activeIndex)
-            );
+            const count = artworksRef.current.length;
+            const idx = Math.max(0, Math.min(count - 1, swiper.activeIndex));
+            activeIndexRef.current = idx;
+            setActiveIndex(idx);
             targetOffsetRef.current = idx;
             requestRenderRef.current?.();
           }}
