@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ImageOff } from 'lucide-react';
 import type { Artwork } from '../types/gallery';
 import {
@@ -6,6 +6,13 @@ import {
   markImagePreloaded,
   preloadImage,
 } from '../utils/imagePreloader';
+
+function prefersReducedMotion(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+    return false;
+  }
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
 
 interface MasonryGridProps {
   artworks: Artwork[];
@@ -40,25 +47,32 @@ function useColumnCount(
 interface ArtworkTileProps {
   artwork: Artwork;
   plateNumber: number;
+  columnIndex: number;
   nextArtworkSrc?: string;
   isAboveFold: boolean;
   showCaptions: boolean;
   isCompactMobile: boolean;
+  observeReveal: (el: Element, onReveal: () => void) => () => void;
   onSelect: (artwork: Artwork) => void;
 }
 
 function ArtworkTile({
   artwork,
   plateNumber,
+  columnIndex,
   nextArtworkSrc,
   isAboveFold,
   showCaptions,
   isCompactMobile,
+  observeReveal,
   onSelect,
 }: ArtworkTileProps) {
   const [loaded, setLoaded] = useState(() => isImagePreloaded(artwork.src));
   const [hasError, setHasError] = useState(false);
-  const tileRef = useRef<HTMLButtonElement | null>(null);
+  const [isRevealed, setIsRevealed] = useState(
+    () => typeof IntersectionObserver === 'undefined' || prefersReducedMotion()
+  );
+  const revealRef = useRef<HTMLDivElement | null>(null);
   const imgRef = useRef<HTMLImageElement | null>(null);
   const prevSrcRef = useRef(artwork.src);
 
@@ -77,8 +91,15 @@ function ArtworkTile({
   }, [artwork.src]);
 
   useEffect(() => {
+    if (isRevealed) return;
+    const node = revealRef.current;
+    if (!node) return;
+    return observeReveal(node, () => setIsRevealed(true));
+  }, [isRevealed, observeReveal]);
+
+  useEffect(() => {
     if (isAboveFold || loaded) return;
-    const node = tileRef.current;
+    const node = revealRef.current;
     if (!node || typeof IntersectionObserver === 'undefined') return;
 
     const observer = new IntersectionObserver(
@@ -108,27 +129,33 @@ function ArtworkTile({
   };
 
   const formattedPlate = String(plateNumber).padStart(2, '0');
-
-  const shouldAnimatePlate = plateNumber <= 8;
+  const staggerDelayMs = (columnIndex % 3) * 65;
 
   return (
-    <button
-      ref={tileRef}
-      type="button"
-      onClick={() => onSelect(artwork)}
-      onMouseEnter={handleWarmIntent}
-      onFocus={handleWarmIntent}
-      onTouchStart={handleWarmIntent}
-      aria-label={`View artwork ${artwork.title}, ${artwork.year}`}
+    <div
+      ref={revealRef}
       style={
-        shouldAnimatePlate
-          ? { animationDelay: `${Math.min(plateNumber - 1, 6) * 35}ms` }
+        !isRevealed || staggerDelayMs > 0
+          ? { transitionDelay: isRevealed ? `${staggerDelayMs}ms` : '0ms' }
           : undefined
       }
-      className={`${shouldAnimatePlate ? 'animate-gallery-plate ' : ''}${!isAboveFold ? 'artwork-plate-contain ' : ''}group relative block w-full text-left bg-[#F8F3E6] ${
-        isCompactMobile ? 'p-1.5 sm:p-3.5' : 'p-3 sm:p-3.5'
-      } border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2]`}
+      className={`${!isAboveFold ? 'artwork-plate-contain ' : ''}transition-[opacity,transform] duration-[620ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        isRevealed
+          ? 'opacity-100 translate-y-0'
+          : 'opacity-0 translate-y-[18px]'
+      }`}
     >
+      <button
+        type="button"
+        onClick={() => onSelect(artwork)}
+        onMouseEnter={handleWarmIntent}
+        onFocus={handleWarmIntent}
+        onTouchStart={handleWarmIntent}
+        aria-label={`View artwork ${artwork.title}, ${artwork.year}`}
+        className={`group relative block w-full text-left bg-[#F8F3E6] ${
+          isCompactMobile ? 'p-1.5 sm:p-3.5' : 'p-3 sm:p-3.5'
+        } border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2]`}
+      >
       {/* Vintage Album Corner Mounting Ticks */}
       <span
         aria-hidden="true"
@@ -252,7 +279,8 @@ function ArtworkTile({
           </span>
         </div>
       )}
-    </button>
+      </button>
+    </div>
   );
 }
 
@@ -275,6 +303,57 @@ export function MasonryGrid({
   const gridGapClass = isCompactMobile
     ? 'gap-2 sm:gap-5 lg:gap-7'
     : 'gap-3.5 sm:gap-5 lg:gap-7';
+
+  const revealCallbacksRef = useRef(new Map<Element, () => void>());
+  const revealObserverRef = useRef<IntersectionObserver | null>(null);
+
+  useEffect(() => {
+    if (typeof IntersectionObserver === 'undefined' || prefersReducedMotion()) {
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const isAlreadyPassedAbove =
+            entry.boundingClientRect.top < 0 &&
+            entry.boundingClientRect.bottom <=
+              (entry.rootBounds?.height ?? window.innerHeight);
+          if (entry.isIntersecting || isAlreadyPassedAbove) {
+            const onReveal = revealCallbacksRef.current.get(entry.target);
+            if (onReveal) {
+              onReveal();
+              revealCallbacksRef.current.delete(entry.target);
+            }
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      {
+        rootMargin: '0px 0px -24px 0px',
+        threshold: 0.04,
+      }
+    );
+
+    revealObserverRef.current = observer;
+    for (const el of revealCallbacksRef.current.keys()) {
+      observer.observe(el);
+    }
+
+    return () => {
+      observer.disconnect();
+      revealObserverRef.current = null;
+    };
+  }, []);
+
+  const observeReveal = useCallback((el: Element, onReveal: () => void) => {
+    revealCallbacksRef.current.set(el, onReveal);
+    revealObserverRef.current?.observe(el);
+    return () => {
+      revealCallbacksRef.current.delete(el);
+      revealObserverRef.current?.unobserve(el);
+    };
+  }, []);
 
   const { columns, indexById } = useMemo(() => {
     const colArrays: Artwork[][] = Array.from({ length: columnCount }, () => []);
@@ -353,10 +432,12 @@ export function MasonryGrid({
                 key={artwork.id}
                 artwork={artwork}
                 plateNumber={globalIndex + 1}
+                columnIndex={colIdx}
                 nextArtworkSrc={nextArtwork?.src}
                 isAboveFold={globalIndex < (isCompactMobile ? 6 : 4)}
                 showCaptions={showCaptions}
                 isCompactMobile={isCompactMobile}
+                observeReveal={observeReveal}
                 onSelect={onSelectArtwork}
               />
             );
