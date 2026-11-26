@@ -331,7 +331,7 @@ export default function App() {
               <div className="flex items-center gap-2.5 min-w-0">
                 <span className="text-[#B84A27]" aria-hidden="true">▸</span>
                 <span className="truncate text-[#F8F3E6]">
-                  3D Gallery · 35mm
+                  3D Rotunda · 35mm
                 </span>
                 <span aria-hidden="true" className="hidden sm:inline text-[#635443]">
                   |

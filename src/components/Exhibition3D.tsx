@@ -1,19 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
-import { Swiper, SwiperSlide } from 'swiper/react';
-import { FreeMode, Keyboard, Mousewheel } from 'swiper/modules';
-import type { Swiper as SwiperInstance } from 'swiper';
-import 'swiper/css';
-import 'swiper/css/free-mode';
 import {
   ChevronDown,
   ChevronLeft,
   ChevronRight,
   ChevronUp,
+  Compass,
   Expand,
   Film,
   LayoutGrid,
@@ -39,7 +35,7 @@ interface Exhibition3DProps {
   onExit3D: () => void;
 }
 
-interface CarouselFrameItem {
+interface HelixFrameItem {
   artwork: Artwork;
   index: number;
   group: THREE.Group;
@@ -52,10 +48,25 @@ interface CarouselFrameItem {
   texState: 'idle' | 'loading' | 'done';
 }
 
+const HELIX_RADIUS = 3.65;
+const SPINE_RADIUS = 3.26;
+const ANGLE_STEP = 0.74;
+const Y_STEP = 0.36;
+const BASE_FRAME_Y = 1.65;
+
 const _camTargetPos = new THREE.Vector3();
 const _camCurrentPos = new THREE.Vector3();
 const _lookTarget = new THREE.Vector3();
 const _lookCurrent = new THREE.Vector3();
+const _focusFramePos = new THREE.Vector3();
+const _axisFocusPos = new THREE.Vector3();
+const _dummyMat4 = new THREE.Matrix4();
+const _dummyQuat = new THREE.Quaternion();
+const _dummyPos = new THREE.Vector3();
+const _dummyScale = new THREE.Vector3(1, 1, 1);
+const _upAxis = new THREE.Vector3(0, 1, 0);
+const _dirVec = new THREE.Vector3();
+
 const _colorFocused = new THREE.Color(0xb84a27);
 const _colorIdle = new THREE.Color(0x9f7e48);
 const _emissiveFocused = new THREE.Color(0x3b1206);
@@ -184,38 +195,67 @@ export function Exhibition3D({
   onExit3D,
 }: Exhibition3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
-  const swiperRef = useRef<SwiperInstance | null>(null);
+  const gestureSurfaceRef = useRef<HTMLDivElement | null>(null);
   const filmstripRef = useRef<HTMLDivElement | null>(null);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
+  const [isOverview, setIsOverview] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
   const [isDockCollapsed, setIsDockCollapsed] = useState(false);
   const [isFilmstripOpen, setIsFilmstripOpen] = useState(false);
   const [webglUnsupported, setWebglUnsupported] = useState(false);
 
   const activeIndexRef = useRef(0);
   const hoveredIndexRef = useRef<number | null>(null);
+  const isOverviewRef = useRef(false);
+  isOverviewRef.current = isOverview;
+
   const targetOffsetRef = useRef(0);
-  const isTouchingRef = useRef(false);
+  const momentumVelRef = useRef(0);
+  const snapTargetRef = useRef<number | null>(0);
+  const isDraggingRef = useRef(false);
+  const introProgressRef = useRef(1);
+
   const artworksRef = useRef(artworks);
   artworksRef.current = artworks;
 
   const onSelectRef = useRef(onSelectArtwork);
   onSelectRef.current = onSelectArtwork;
 
-  // Imperative bridge to trigger WebGL render, raycast tap, and pointer hover
+  // Imperative bridges to WebGL loop
   const requestRenderRef = useRef<(() => void) | null>(null);
   const handleTapAtRef = useRef<((clientX: number, clientY: number) => void) | null>(null);
   const handleHoverAtRef = useRef<((clientX: number, clientY: number) => void) | null>(null);
   const handlePointerParallaxRef = useRef<((nx: number, ny: number) => void) | null>(null);
   const handlePointerLeaveRef = useRef<(() => void) | null>(null);
 
+  const goToIndex = (index: number) => {
+    const count = artworksRef.current.length;
+    if (count === 0) return;
+    const clamped = Math.max(0, Math.min(count - 1, index));
+    momentumVelRef.current = 0;
+    snapTargetRef.current = clamped;
+    targetOffsetRef.current = clamped;
+    activeIndexRef.current = clamped;
+    setActiveIndex(clamped);
+    requestRenderRef.current?.();
+  };
+
   useEffect(() => {
     setActiveIndex(0);
     activeIndexRef.current = 0;
     targetOffsetRef.current = 0;
-    swiperRef.current?.slideTo(0, 0);
+    snapTargetRef.current = 0;
+    momentumVelRef.current = 0;
+    introProgressRef.current = 1;
+    setIsOverview(false);
+    isOverviewRef.current = false;
   }, [artworks]);
+
+  useEffect(() => {
+    requestRenderRef.current?.();
+  }, [isOverview]);
 
   useEffect(() => {
     if (!isFilmstripOpen || !filmstripRef.current) return;
@@ -235,6 +275,75 @@ export function Exhibition3D({
     }
   }, [isFilmstripOpen, activeIndex]);
 
+  // Keyboard navigation
+  useEffect(() => {
+    if (isModalOpen || artworks.length === 0) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') {
+        e.preventDefault();
+        goToIndex(Math.min(artworksRef.current.length - 1, activeIndexRef.current + 1));
+      } else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        goToIndex(Math.max(0, activeIndexRef.current - 1));
+      } else if (e.key === 'Enter' || e.key === ' ') {
+        const current = artworksRef.current[activeIndexRef.current];
+        if (current) {
+          e.preventDefault();
+          onSelectRef.current(current);
+        }
+      } else if (e.key === 'o' || e.key === 'O') {
+        setIsOverview((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isModalOpen, artworks.length]);
+
+  // Native non-passive wheel listener on 3D gesture overlay
+  useEffect(() => {
+    const surface = gestureSurfaceRef.current;
+    if (!surface || isLoading || artworks.length === 0) return;
+
+    const onWheel = (e: WheelEvent) => {
+      if (isModalOpen) return;
+      const count = artworksRef.current.length;
+      if (count <= 1) return;
+      e.preventDefault();
+
+      introProgressRef.current = Math.min(introProgressRef.current, 0.2);
+      const rawDelta =
+        Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
+      const stepDelta = THREE.MathUtils.clamp(rawDelta * 0.0042, -1.6, 1.6);
+
+      snapTargetRef.current = null;
+      const nextOffset = THREE.MathUtils.clamp(
+        targetOffsetRef.current + stepDelta,
+        0,
+        count - 1
+      );
+      targetOffsetRef.current = nextOffset;
+      momentumVelRef.current = THREE.MathUtils.clamp(
+        momentumVelRef.current * 0.55 + stepDelta * 9.5,
+        -12,
+        12
+      );
+
+      const nearest = Math.max(0, Math.min(count - 1, Math.round(nextOffset)));
+      if (nearest !== activeIndexRef.current) {
+        activeIndexRef.current = nearest;
+        setActiveIndex(nearest);
+      }
+      requestRenderRef.current?.();
+    };
+
+    surface.addEventListener('wheel', onWheel, { passive: false });
+    return () => surface.removeEventListener('wheel', onWheel);
+  }, [isLoading, artworks.length, isModalOpen]);
+
+  // Core Three.js 3D Helical Rotunda Scene
   useEffect(() => {
     if (isLoading || artworks.length === 0) return;
     const container = mountRef.current;
@@ -249,6 +358,9 @@ export function Exhibition3D({
     const prefersReducedMotion = window.matchMedia(
       '(prefers-reduced-motion: reduce)'
     ).matches;
+    if (prefersReducedMotion || isSoftwareGl) {
+      introProgressRef.current = 0;
+    }
 
     let width = Math.max(container.clientWidth, 300);
     let height = Math.max(container.clientHeight, 440);
@@ -284,70 +396,73 @@ export function Exhibition3D({
     const scene = new THREE.Scene();
     const bgHex = 0xeae0ca;
     scene.background = new THREE.Color(bgHex);
-    scene.fog = new THREE.FogExp2(bgHex, 0.045);
+    scene.fog = new THREE.FogExp2(bgHex, 0.036);
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const roomEnv = new RoomEnvironment();
     const envTarget = pmremGenerator.fromScene(roomEnv, 0.04);
     scene.environment = envTarget.texture;
-    scene.environmentIntensity = 0.42;
+    scene.environmentIntensity = 0.44;
     roomEnv.dispose();
     pmremGenerator.dispose();
 
     const getResponsiveFov = (w: number, h: number) => {
       const aspect = w / h;
-      if (aspect < 0.78) return 50;
-      if (w < 768 || aspect < 1.0) return 46;
-      return 40;
+      if (aspect < 0.78) return 52;
+      if (w < 768 || aspect < 1.0) return 48;
+      return 42;
     };
 
     const camera = new THREE.PerspectiveCamera(
       getResponsiveFov(width, height),
       width / height,
       0.1,
-      60
+      80
     );
 
-    const getResponsiveCamBase = (w: number, h: number) => {
+    const getResponsiveCameraConfig = (w: number, h: number, overview: boolean) => {
       const aspect = w / h;
-      const baseZ =
+      const baseDist =
         aspect < 1.0
-          ? Math.min(7.5, Math.max(3.9, 3.65 / Math.max(0.45, aspect)))
-          : 3.82;
-      const baseY = aspect < 0.85 ? 1.56 : 1.54;
-      const lookY = aspect < 0.85 ? 1.24 : 1.35;
-      return { baseZ, baseY, lookY, viewportAspect: aspect };
+          ? Math.min(6.3, Math.max(4.1, 3.6 / Math.max(0.46, aspect)))
+          : 3.95;
+      const focusDist = overview ? baseDist + 3.05 : baseDist;
+      const camOffsetY = overview
+        ? aspect < 0.85
+          ? 1.55
+          : 1.25
+        : aspect < 0.85
+          ? 0.42
+          : 0.28;
+      const angleLead = overview ? 0.36 : 0.14;
+      const axisBlend = overview ? 0.82 : 0.22;
+      return { focusDist, camOffsetY, angleLead, axisBlend, viewportAspect: aspect };
     };
 
-    const initialCam = getResponsiveCamBase(width, height);
-    _camCurrentPos.set(0, initialCam.baseY, initialCam.baseZ);
-    _lookCurrent.set(0, initialCam.lookY, 0);
-    camera.position.copy(_camCurrentPos);
-    camera.lookAt(_lookCurrent);
-
-    // 3-Point Warm Gallery Studio Lighting (balanced for NoToneMapping + true-color prints)
-    const hemiLight = new THREE.HemisphereLight(0xfff8eb, 0x6f5b46, 0.48);
+    // 3-Point Warm Gallery Studio Lighting (rotates dynamically with camera azimuth)
+    const hemiLight = new THREE.HemisphereLight(0xfff8eb, 0x6f5b46, 0.52);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff1d6, 0.84);
-    keyLight.position.set(3.2, 6.8, 5.4);
+    const keyLight = new THREE.DirectionalLight(0xfff1d6, 0.82);
+    keyLight.position.set(4.5, 6.8, 7.5);
+    scene.add(keyLight.target);
     if (!isSoftwareGl) {
       keyLight.castShadow = true;
       const shadowRes = isMobilePerf ? 512 : 1024;
       keyLight.shadow.mapSize.set(shadowRes, shadowRes);
       keyLight.shadow.camera.near = 0.5;
-      keyLight.shadow.camera.far = 22;
-      keyLight.shadow.camera.left = -7;
-      keyLight.shadow.camera.right = 7;
-      keyLight.shadow.camera.top = 7;
-      keyLight.shadow.camera.bottom = -7;
+      keyLight.shadow.camera.far = 26;
+      keyLight.shadow.camera.left = -8;
+      keyLight.shadow.camera.right = 8;
+      keyLight.shadow.camera.top = 8;
+      keyLight.shadow.camera.bottom = -8;
       keyLight.shadow.bias = -0.0005;
       keyLight.shadow.normalBias = 0.02;
     }
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0xebd8bc, 0.38);
-    rimLight.position.set(-4.2, 3.6, -4.5);
+    const rimLight = new THREE.DirectionalLight(0xebd8bc, 0.4);
+    rimLight.position.set(-5.0, 4.0, -5.5);
     scene.add(rimLight);
 
     const maxAnisotropy = isMobilePerf
@@ -357,9 +472,36 @@ export function Exhibition3D({
     const textureLoader = new THREE.TextureLoader();
     textureLoader.setCrossOrigin('anonymous');
 
-    // Grounded Warm Museum Floor + Inlaid Brass Center Stage Ring
+    // Architectural Materials
+    const darkWalnutMat = new THREE.MeshStandardMaterial({
+      color: 0x261d16,
+      roughness: 0.46,
+      metalness: 0.12,
+    });
+    const matBoardMat = new THREE.MeshStandardMaterial({
+      color: 0xf9f5eb,
+      roughness: 0.88,
+      metalness: 0.02,
+    });
+    const travertineMat = new THREE.MeshStandardMaterial({
+      color: 0xd8cab0,
+      roughness: 0.84,
+      metalness: 0.04,
+    });
+    const brassSpineMat = new THREE.MeshStandardMaterial({
+      color: 0x9f7e48,
+      roughness: 0.32,
+      metalness: 0.78,
+    });
+    const bronzeArmMat = new THREE.MeshStandardMaterial({
+      color: 0x1e1813,
+      roughness: 0.36,
+      metalness: 0.72,
+    });
+
+    // Rotunda Limestone Floor & Concentric Brass Inlay Rings
     const floor = new THREE.Mesh(
-      new THREE.CircleGeometry(24, 64),
+      new THREE.CircleGeometry(30, 64),
       new THREE.MeshStandardMaterial({
         color: 0xe3d7be,
         roughness: 0.92,
@@ -371,73 +513,169 @@ export function Exhibition3D({
     floor.receiveShadow = !isSoftwareGl;
     scene.add(floor);
 
-    const stageRingOuter = new THREE.Mesh(
-      new THREE.RingGeometry(1.52, 1.56, 64),
-      new THREE.MeshStandardMaterial({
-        color: 0x9f7e48,
-        roughness: 0.36,
-        metalness: 0.78,
-        polygonOffset: true,
-        polygonOffsetFactor: -1,
-        polygonOffsetUnits: -1,
-      })
-    );
-    stageRingOuter.rotation.x = -Math.PI / 2;
-    stageRingOuter.position.set(0, 0.004, 0.08);
-    scene.add(stageRingOuter);
+    const brassInlayMat = new THREE.MeshStandardMaterial({
+      color: 0x9f7e48,
+      roughness: 0.36,
+      metalness: 0.78,
+      polygonOffset: true,
+      polygonOffsetFactor: -1,
+      polygonOffsetUnits: -1,
+    });
 
-    const stageSpotlightPool = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.1, 2.2),
+    [1.82, HELIX_RADIUS, 5.4].forEach((radius) => {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(radius - 0.03, radius + 0.03, 72),
+        brassInlayMat
+      );
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.005;
+      scene.add(ring);
+    });
+
+    const rotundaCenterPool = new THREE.Mesh(
+      new THREE.PlaneGeometry(4.4, 4.4),
       new THREE.MeshBasicMaterial({
         map: shadowTex,
         transparent: true,
         depthWrite: false,
-        opacity: 0.38,
+        opacity: 0.44,
       })
     );
-    stageSpotlightPool.rotation.x = -Math.PI / 2;
-    stageSpotlightPool.position.set(0, 0.003, 0.12);
-    scene.add(stageSpotlightPool);
+    rotundaCenterPool.rotation.x = -Math.PI / 2;
+    rotundaCenterPool.position.y = 0.004;
+    scene.add(rotundaCenterPool);
 
-    const depthHiddenObjects: THREE.Object3D[] = [stageSpotlightPool];
+    const depthHiddenObjects: THREE.Object3D[] = [rotundaCenterPool];
 
-    const darkWalnutMat = new THREE.MeshStandardMaterial({
-      color: 0x261d16,
-      roughness: 0.46,
-      metalness: 0.12,
+    // Central Architectural Atrium Core & Pedestal
+    const topArtworkY = BASE_FRAME_Y + Math.max(0, artworks.length - 1) * Y_STEP;
+    const mastTotalHeight = topArtworkY + 1.35;
+
+    const pedestalLower = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.48, 1.56, 0.16, 48),
+      travertineMat
+    );
+    pedestalLower.position.y = 0.08;
+    pedestalLower.castShadow = !isSoftwareGl;
+    pedestalLower.receiveShadow = !isSoftwareGl;
+    scene.add(pedestalLower);
+
+    const pedestalBrassTrim = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 1.5, 0.032, 48),
+      brassSpineMat
+    );
+    pedestalBrassTrim.position.y = 0.176;
+    scene.add(pedestalBrassTrim);
+
+    const centralMast = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.58, 0.68, mastTotalHeight, 36),
+      travertineMat
+    );
+    centralMast.position.y = 0.16 + mastTotalHeight / 2;
+    centralMast.castShadow = !isSoftwareGl;
+    centralMast.receiveShadow = !isSoftwareGl;
+    scene.add(centralMast);
+
+    const mastCapital = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.76, 0.62, 0.14, 36),
+      darkWalnutMat
+    );
+    mastCapital.position.y = 0.16 + mastTotalHeight + 0.07;
+    scene.add(mastCapital);
+
+    // Instanced Brass Collar Rings up the Central Mast
+    const collarCount = Math.max(1, Math.floor(mastTotalHeight / 2.6));
+    const collarGeo = new THREE.CylinderGeometry(0.66, 0.66, 0.045, 36);
+    const collarInstanced = new THREE.InstancedMesh(
+      collarGeo,
+      brassSpineMat,
+      collarCount
+    );
+    for (let c = 0; c < collarCount; c++) {
+      _dummyPos.set(0, 1.15 + c * 2.6, 0);
+      _dummyQuat.identity();
+      _dummyScale.set(1, 1, 1);
+      _dummyMat4.compose(_dummyPos, _dummyQuat, _dummyScale);
+      collarInstanced.setMatrixAt(c, _dummyMat4);
+    }
+    collarInstanced.instanceMatrix.needsUpdate = true;
+    collarInstanced.computeBoundingSphere();
+    scene.add(collarInstanced);
+
+    // Continuous Helical Brass Spine connecting all artworks
+    const curvePoints: THREE.Vector3[] = [];
+    const startIdx = -0.35;
+    const endIdx = Math.max(0.35, artworks.length - 0.65);
+    const sampleSteps = Math.max(24, artworks.length * 4);
+    for (let s = 0; s <= sampleSteps; s++) {
+      const t = startIdx + (s / sampleSteps) * (endIdx - startIdx);
+      const ang = t * ANGLE_STEP;
+      const py = BASE_FRAME_Y + t * Y_STEP;
+      curvePoints.push(
+        new THREE.Vector3(
+          SPINE_RADIUS * Math.sin(ang),
+          py,
+          SPINE_RADIUS * Math.cos(ang)
+        )
+      );
+    }
+    const spineCurve = new THREE.CatmullRomCurve3(curvePoints);
+    const spineTube = new THREE.Mesh(
+      new THREE.TubeGeometry(
+        spineCurve,
+        Math.max(48, artworks.length * 10),
+        0.046,
+        8,
+        false
+      ),
+      brassSpineMat
+    );
+    spineTube.castShadow = !isSoftwareGl;
+    scene.add(spineTube);
+
+    // Instanced Radial Tension Struts connecting Central Mast -> Helical Spine
+    const strutGeo = new THREE.CylinderGeometry(0.016, 0.016, 1, 8);
+    const strutInstanced = new THREE.InstancedMesh(
+      strutGeo,
+      bronzeArmMat,
+      artworks.length
+    );
+    const mastRadius = 0.6;
+    const strutLen = Math.max(0.5, SPINE_RADIUS - mastRadius);
+    const strutMidRadius = mastRadius + strutLen / 2;
+
+    artworks.forEach((_, idx) => {
+      const ang = idx * ANGLE_STEP;
+      const py = BASE_FRAME_Y + idx * Y_STEP;
+      _dummyPos.set(
+        strutMidRadius * Math.sin(ang),
+        py,
+        strutMidRadius * Math.cos(ang)
+      );
+      _dirVec.set(Math.sin(ang), 0, Math.cos(ang));
+      _dummyQuat.setFromUnitVectors(_upAxis, _dirVec);
+      _dummyScale.set(1, strutLen, 1);
+      _dummyMat4.compose(_dummyPos, _dummyQuat, _dummyScale);
+      strutInstanced.setMatrixAt(idx, _dummyMat4);
     });
-    const matBoardMat = new THREE.MeshStandardMaterial({
-      color: 0xf9f5eb,
-      roughness: 0.88,
-      metalness: 0.02,
-    });
-    const plinthStoneMat = new THREE.MeshStandardMaterial({
-      color: 0xd6c7aa,
-      roughness: 0.84,
-      metalness: 0.04,
-    });
-    const stanchionMetalMat = new THREE.MeshStandardMaterial({
-      color: 0x1e1813,
-      roughness: 0.36,
-      metalness: 0.72,
-    });
+    strutInstanced.instanceMatrix.needsUpdate = true;
+    strutInstanced.computeBoundingSphere();
+    scene.add(strutInstanced);
 
     const stageGroup = new THREE.Group();
     scene.add(stageGroup);
 
-    const frameItems: CarouselFrameItem[] = [];
+    const frameItems: HelixFrameItem[] = [];
     let visibleClickableMeshes: THREE.Object3D[] = [];
     let disposed = false;
-
-    const frameCenterY = 1.58;
 
     const computeFrameMetrics = (rawAspect: number) => {
       const safeAspect =
         Number.isFinite(rawAspect) && rawAspect > 0.1
           ? Math.max(0.4, Math.min(2.6, rawAspect))
           : 4 / 3;
-      const maxW = 1.9;
-      const maxH = 1.44;
+      const maxW = 1.88;
+      const maxH = 1.42;
       let photoWidth = maxH * safeAspect;
       let photoHeight = maxH;
       if (photoWidth > maxW) {
@@ -452,9 +690,9 @@ export function Exhibition3D({
         safeAspect > 1.15
           ? (safeAspect - 1.15) * 0.34
           : safeAspect < 0.88
-            ? -0.1
+            ? -0.08
             : 0;
-      const lookYAdjust = safeAspect < 0.88 ? 0.03 : 0;
+      const lookYAdjust = safeAspect < 0.88 ? 0.02 : 0;
       return {
         safeAspect,
         photoWidth,
@@ -469,12 +707,6 @@ export function Exhibition3D({
     };
 
     const sharedPlaceholderTex = createSharedPlaceholderTexture(maxAnisotropy);
-    const sharedContactShadowMat = new THREE.MeshBasicMaterial({
-      map: shadowTex,
-      transparent: true,
-      depthWrite: false,
-      opacity: 0.68,
-    });
     const sharedPlaqueBlankMat = new THREE.MeshStandardMaterial({
       color: 0xf8f3e6,
       roughness: 0.72,
@@ -485,6 +717,11 @@ export function Exhibition3D({
     });
     const sharedPlaqueBackGeo = new THREE.BoxGeometry(1.04, 0.28, 0.022);
     const sharedPlaquePlaneGeo = new THREE.PlaneGeometry(1.0, 0.25);
+
+    const armOffsetZ = SPINE_RADIUS - HELIX_RADIUS; // -0.39 (behind frame)
+    const sharedArmGeo = new THREE.BoxGeometry(0.06, 0.08, Math.abs(armOffsetZ) + 0.04);
+    const sharedClampGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.14, 12);
+    const sharedAccentRingGeo = new THREE.BoxGeometry(0.14, 0.032, 0.09);
 
     const maxStageTexDim = isMobilePerf ? 1024 : 1600;
     const maxConcurrentLoads = isMobilePerf ? 2 : 4;
@@ -510,31 +747,27 @@ export function Exhibition3D({
       const initialAspect = (artwork.widthRatio || 4) / (artwork.heightRatio || 3);
       let metrics = computeFrameMetrics(initialAspect);
 
+      const angle = index * ANGLE_STEP;
+      const frameY = BASE_FRAME_Y + index * Y_STEP;
+
       const group = new THREE.Group();
+      group.position.set(
+        HELIX_RADIUS * Math.sin(angle),
+        frameY,
+        HELIX_RADIUS * Math.cos(angle)
+      );
+      group.rotation.y = angle;
       stageGroup.add(group);
 
-      const contactShadow = new THREE.Mesh(
-        new THREE.PlaneGeometry(metrics.outerWidth + 0.65, 1.15),
-        sharedContactShadowMat
-      );
-      contactShadow.rotation.x = -Math.PI / 2;
-      contactShadow.position.y = 0.005;
-      group.add(contactShadow);
-      depthHiddenObjects.push(contactShadow);
+      // Cantilevered Bracket Arm + Spine Clamp + Accent Light Indicator
+      const spineClamp = new THREE.Mesh(sharedClampGeo, brassSpineMat);
+      spineClamp.position.set(0, 0, armOffsetZ);
+      group.add(spineClamp);
 
-      const baseHeight = 0.14;
-      const plinthBase = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          Math.max(1.05, metrics.outerWidth * 0.64),
-          baseHeight,
-          0.42
-        ),
-        plinthStoneMat
-      );
-      plinthBase.position.y = baseHeight / 2;
-      plinthBase.castShadow = !isSoftwareGl;
-      plinthBase.receiveShadow = !isSoftwareGl;
-      group.add(plinthBase);
+      const bracketArm = new THREE.Mesh(sharedArmGeo, bronzeArmMat);
+      bracketArm.position.set(0, 0, armOffsetZ / 2);
+      bracketArm.castShadow = !isSoftwareGl;
+      group.add(bracketArm);
 
       const accentMat = new THREE.MeshStandardMaterial({
         color: index === 0 ? 0xb84a27 : 0x9f7e48,
@@ -542,55 +775,31 @@ export function Exhibition3D({
         roughness: 0.34,
         metalness: 0.58,
       });
-      const plinthTrim = new THREE.Mesh(
-        new THREE.BoxGeometry(
-          Math.max(1.09, metrics.outerWidth * 0.66),
-          0.028,
-          0.44
-        ),
-        accentMat
-      );
-      plinthTrim.position.y = baseHeight + 0.014;
-      group.add(plinthTrim);
 
-      let frameBottomY = frameCenterY - metrics.outerHeight / 2;
-      let stanchionHeight = Math.max(0.24, frameBottomY - baseHeight);
-      let sharedStanchionGeo = new THREE.CylinderGeometry(
-        0.022,
-        0.022,
-        stanchionHeight,
-        10
-      );
-      let stanchionX = Math.min(0.42, metrics.outerWidth * 0.24);
+      const accentCap = new THREE.Mesh(sharedAccentRingGeo, accentMat);
+      accentCap.position.set(0, metrics.outerHeight / 2 + 0.025, 0);
+      group.add(accentCap);
 
-      const leftPost = new THREE.Mesh(sharedStanchionGeo, stanchionMetalMat);
-      leftPost.position.set(-stanchionX, baseHeight + stanchionHeight / 2, -0.02);
-      leftPost.castShadow = !isSoftwareGl;
-      group.add(leftPost);
-
-      const rightPost = new THREE.Mesh(sharedStanchionGeo, stanchionMetalMat);
-      rightPost.position.set(stanchionX, baseHeight + stanchionHeight / 2, -0.02);
-      rightPost.castShadow = !isSoftwareGl;
-      group.add(rightPost);
-
+      // Solid Walnut Frame
       const outerFrame = new THREE.Mesh(
         new THREE.BoxGeometry(metrics.outerWidth, metrics.outerHeight, 0.08),
         darkWalnutMat
       );
-      outerFrame.position.set(0, frameCenterY, 0);
       outerFrame.castShadow = !isSoftwareGl;
       outerFrame.receiveShadow = !isSoftwareGl;
       outerFrame.layers.enable(1);
       outerFrame.userData.artworkIndex = index;
       group.add(outerFrame);
 
+      // Archival Cream Mat Board
       const matBoard = new THREE.Mesh(
         new THREE.BoxGeometry(metrics.matWidth, metrics.matHeight, 0.024),
         matBoardMat
       );
-      matBoard.position.set(0, frameCenterY, 0.036);
+      matBoard.position.set(0, 0, 0.036);
       group.add(matBoard);
 
+      // True sRGB Print Plane
       const photoMat = new THREE.MeshBasicMaterial({
         map: sharedPlaceholderTex,
         toneMapped: false,
@@ -600,20 +809,22 @@ export function Exhibition3D({
         new THREE.PlaneGeometry(metrics.photoWidth, metrics.photoHeight),
         photoMat
       );
-      photoMesh.position.set(0, frameCenterY, 0.052);
+      photoMesh.position.set(0, 0, 0.052);
       photoMesh.layers.enable(1);
       photoMesh.userData.artworkIndex = index;
       group.add(photoMesh);
 
+      // Hanging Museum Plaque below frame
+      const plaqueOffsetY = -(metrics.outerHeight / 2 + 0.17);
       const plaqueBack = new THREE.Mesh(sharedPlaqueBackGeo, darkWalnutMat);
-      plaqueBack.position.set(0, frameBottomY - 0.17, 0.004);
+      plaqueBack.position.set(0, plaqueOffsetY, 0.004);
       group.add(plaqueBack);
 
       const plaqueMesh = new THREE.Mesh(
         sharedPlaquePlaneGeo,
         sharedPlaqueBlankMat
       );
-      plaqueMesh.position.set(0, frameBottomY - 0.17, 0.018);
+      plaqueMesh.position.set(0, plaqueOffsetY, 0.018);
       group.add(plaqueMesh);
 
       let plaqueBuilt = false;
@@ -631,7 +842,7 @@ export function Exhibition3D({
         });
       };
 
-      const frameItem: CarouselFrameItem = {
+      const frameItem: HelixFrameItem = {
         artwork,
         index,
         group,
@@ -712,53 +923,10 @@ export function Exhibition3D({
                     0.08
                   );
 
-                  plinthBase.geometry.dispose();
-                  plinthBase.geometry = new THREE.BoxGeometry(
-                    Math.max(1.05, metrics.outerWidth * 0.64),
-                    baseHeight,
-                    0.42
-                  );
-
-                  plinthTrim.geometry.dispose();
-                  plinthTrim.geometry = new THREE.BoxGeometry(
-                    Math.max(1.09, metrics.outerWidth * 0.66),
-                    0.028,
-                    0.44
-                  );
-
-                  contactShadow.geometry.dispose();
-                  contactShadow.geometry = new THREE.PlaneGeometry(
-                    metrics.outerWidth + 0.65,
-                    1.15
-                  );
-
-                  frameBottomY = frameCenterY - metrics.outerHeight / 2;
-                  stanchionHeight = Math.max(0.24, frameBottomY - baseHeight);
-                  stanchionX = Math.min(0.42, metrics.outerWidth * 0.24);
-                  const nextStanchionGeo = new THREE.CylinderGeometry(
-                    0.022,
-                    0.022,
-                    stanchionHeight,
-                    10
-                  );
-                  leftPost.geometry = nextStanchionGeo;
-                  rightPost.geometry = nextStanchionGeo;
-                  sharedStanchionGeo.dispose();
-                  sharedStanchionGeo = nextStanchionGeo;
-
-                  leftPost.position.set(
-                    -stanchionX,
-                    baseHeight + stanchionHeight / 2,
-                    -0.02
-                  );
-                  rightPost.position.set(
-                    stanchionX,
-                    baseHeight + stanchionHeight / 2,
-                    -0.02
-                  );
-
-                  plaqueBack.position.y = frameBottomY - 0.17;
-                  plaqueMesh.position.y = frameBottomY - 0.17;
+                  accentCap.position.y = metrics.outerHeight / 2 + 0.025;
+                  const nextPlaqueY = -(metrics.outerHeight / 2 + 0.17);
+                  plaqueBack.position.y = nextPlaqueY;
+                  plaqueMesh.position.y = nextPlaqueY;
 
                   frameItem.camZAdjust = metrics.camZAdjust;
                   frameItem.lookYAdjust = metrics.lookYAdjust;
@@ -810,12 +978,12 @@ export function Exhibition3D({
       composer.addPass(new RenderPass(scene, camera));
 
       dofPass = new SubtleDepthOfFieldPass(scene, camera, {
-        focus: _camCurrentPos.z - 0.04,
-        focusDeadZone: isMobilePerf ? 0.72 : 0.56,
-        blurRange: 2.5,
-        maxBlur: width < 640 ? 0.0036 : 0.0052,
-        samples: isMobilePerf ? 4 : 14,
-        depthScale: isMobilePerf ? 0.25 : 0.5,
+        focus: 4.0,
+        focusDeadZone: isMobilePerf ? 0.85 : 0.65,
+        blurRange: 3.0,
+        maxBlur: width < 640 ? 0.003 : 0.0044,
+        samples: isMobilePerf ? 4 : 12,
+        depthScale: isMobilePerf ? 0.25 : 0.45,
         depthHiddenObjects,
       });
       composer.addPass(dofPass);
@@ -829,7 +997,26 @@ export function Exhibition3D({
     let pointerParallaxY = 0;
     let smoothParallaxX = 0;
     let smoothParallaxY = 0;
-    let smoothRoll = 0;
+
+    // Seed initial camera position (angled Atrium intro if introProgressRef === 1)
+    const initCamCfg = getResponsiveCameraConfig(width, height, isOverviewRef.current);
+    const initIntro = introProgressRef.current;
+    const initAngle = currentOffset * ANGLE_STEP + initCamCfg.angleLead + initIntro * 0.48;
+    const initY = BASE_FRAME_Y + currentOffset * Y_STEP;
+    const initCamRadius =
+      HELIX_RADIUS + initCamCfg.focusDist + initIntro * 2.8;
+    _camCurrentPos.set(
+      initCamRadius * Math.sin(initAngle),
+      initY + initCamCfg.camOffsetY + initIntro * 1.4,
+      initCamRadius * Math.cos(initAngle)
+    );
+    _lookCurrent.set(
+      HELIX_RADIUS * (1 - initCamCfg.axisBlend) * Math.sin(currentOffset * ANGLE_STEP),
+      initY,
+      HELIX_RADIUS * (1 - initCamCfg.axisBlend) * Math.cos(currentOffset * ANGLE_STEP)
+    );
+    camera.position.copy(_camCurrentPos);
+    camera.lookAt(_lookCurrent);
 
     let frameId = 0;
     let renderBusy = false;
@@ -838,32 +1025,29 @@ export function Exhibition3D({
     let lastClockMs = performance.now();
     let lastScheduledFocus = activeIndexRef.current;
 
-    function applyCarouselLayout(offsetValue: number, colorAlpha: number): boolean {
-      const slotSpacing = width < 640 ? 2.58 : 2.68;
-      const visibilityCutoff = width < 640 ? 2.45 : 4.0;
+    function updateHelixVisibilityAndHighlights(
+      offsetValue: number,
+      colorAlpha: number,
+      overview: boolean
+    ): boolean {
+      const visibilityCutoff = overview
+        ? 14.0
+        : width < 640
+          ? 9.5
+          : 11.5;
       let colorAnimating = false;
       const nextClickable: THREE.Object3D[] = [];
 
       for (const item of frameItems) {
-        const rel = item.index - offsetValue;
-        const absRel = Math.abs(rel);
+        const absRel = Math.abs(item.index - offsetValue);
 
         if (absRel > visibilityCutoff) {
           item.group.visible = false;
           continue;
         }
 
-        const x = rel * slotSpacing;
-        const z = -Math.pow(absRel, 1.12) * 1.08;
-        const rotY = THREE.MathUtils.clamp(-rel * 0.29, -0.72, 0.72);
-        const scale = Math.max(0.66, 1 - absRel * 0.13);
-
-        item.group.position.set(x, 0, z);
-        item.group.rotation.y = rotY;
-        item.group.scale.setScalar(scale);
         item.group.visible = true;
         item.ensurePlaque();
-
         nextClickable.push(item.clickTargets[0], item.clickTargets[1]);
 
         const isFocusedOrHover =
@@ -914,7 +1098,7 @@ export function Exhibition3D({
       };
     }
 
-    applyCarouselLayout(currentOffset, 1);
+    updateHelixVisibilityAndHighlights(currentOffset, 1, isOverviewRef.current);
 
     function afterDraw(cb: () => void) {
       if (disposed) return;
@@ -960,18 +1144,77 @@ export function Exhibition3D({
         const delta = Math.max(0.001, Math.min((now - lastClockMs) / 1000, 0.05));
         lastClockMs = now;
 
+        const count = frameItems.length;
+        const maxIdx = Math.max(0, count - 1);
+
+        // Advance momentum glide after pointer/wheel release
+        if (!isDraggingRef.current && Math.abs(momentumVelRef.current) > 0.001) {
+          targetOffsetRef.current += momentumVelRef.current * delta;
+          if (targetOffsetRef.current < 0) {
+            targetOffsetRef.current = 0;
+            momentumVelRef.current = 0;
+          } else if (targetOffsetRef.current > maxIdx) {
+            targetOffsetRef.current = maxIdx;
+            momentumVelRef.current = 0;
+          } else {
+            momentumVelRef.current *= Math.exp(-3.5 * delta);
+          }
+
+          if (Math.abs(momentumVelRef.current) < 0.28) {
+            momentumVelRef.current = 0;
+            snapTargetRef.current = Math.round(targetOffsetRef.current);
+          }
+
+          const nearest = Math.max(0, Math.min(maxIdx, Math.round(targetOffsetRef.current)));
+          if (nearest !== activeIndexRef.current) {
+            activeIndexRef.current = nearest;
+            setActiveIndex(nearest);
+          }
+          renderDirty = true;
+        } else if (
+          !isDraggingRef.current &&
+          snapTargetRef.current !== null &&
+          Math.abs(targetOffsetRef.current - snapTargetRef.current) > 0.001
+        ) {
+          targetOffsetRef.current = THREE.MathUtils.damp(
+            targetOffsetRef.current,
+            snapTargetRef.current,
+            8.5,
+            delta
+          );
+          if (Math.abs(targetOffsetRef.current - snapTargetRef.current) < 0.001) {
+            targetOffsetRef.current = snapTargetRef.current;
+          } else {
+            renderDirty = true;
+          }
+        }
+
+        // Smooth opening atrium glide
+        if (introProgressRef.current > 0.001) {
+          const introDamp = isDraggingRef.current ? 8.5 : 2.9;
+          introProgressRef.current = THREE.MathUtils.damp(
+            introProgressRef.current,
+            0,
+            introDamp,
+            delta
+          );
+          if (introProgressRef.current < 0.002) {
+            introProgressRef.current = 0;
+          } else {
+            renderDirty = true;
+          }
+        }
+
         const goalOffset = targetOffsetRef.current;
         if (prefersReducedMotion || isSoftwareGl) {
           currentOffset = goalOffset;
-        } else if (isTouchingRef.current) {
-          // Snappy 1:1 thumb tracking during Swiper touch gesture
-          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 32, delta);
+        } else if (isDraggingRef.current) {
+          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 28, delta);
           if (Math.abs(currentOffset - goalOffset) > 0.0008) {
             renderDirty = true;
           }
         } else {
-          // Smooth exponential glide when settling to a slide
-          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 7.0, delta);
+          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 7.2, delta);
           if (Math.abs(currentOffset - goalOffset) < 0.0008) {
             currentOffset = goalOffset;
           } else {
@@ -1000,81 +1243,119 @@ export function Exhibition3D({
           }
         }
 
-        const camBase = getResponsiveCamBase(width, height);
+        const overview = isOverviewRef.current;
+        const camCfg = getResponsiveCameraConfig(width, height, overview);
         const framing = getInterpolatedFraming(currentOffset);
-        const aspectPullbackScale = camBase.viewportAspect < 0.85 ? 0.85 : 0.65;
+        const aspectPullbackScale = camCfg.viewportAspect < 0.85 ? 0.82 : 0.65;
 
+        const spiralAngle = currentOffset * ANGLE_STEP;
+        const spiralY = BASE_FRAME_Y + currentOffset * Y_STEP;
+
+        const introT = introProgressRef.current;
         const deltaOffset = goalOffset - currentOffset;
-        const travelIntensity = Math.min(1, Math.abs(deltaOffset) * 1.15);
-        const midSlideGap = Math.sin(
-          Math.min(1, Math.abs(currentOffset - Math.round(currentOffset)) * 2) *
-            (Math.PI * 0.5)
-        );
-        const arcPullback = Math.max(travelIntensity * 0.34, midSlideGap * 0.22);
+        const travelIntensity = Math.min(1, Math.abs(deltaOffset) * 0.9);
+        const arcPullback = travelIntensity * 0.45;
 
-        const swipeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.2, -0.3, 0.3);
-        const gazeLeadX = THREE.MathUtils.clamp(deltaOffset * 0.15, -0.22, 0.22);
+        const camAzimuth =
+          spiralAngle +
+          camCfg.angleLead +
+          introT * 0.42 +
+          smoothParallaxX * 0.16;
+
+        const desiredCamRadius =
+          HELIX_RADIUS +
+          camCfg.focusDist +
+          framing.camZAdjust * aspectPullbackScale +
+          arcPullback +
+          introT * 2.5;
 
         _camTargetPos.set(
-          smoothParallaxX * 0.34 + swipeLeadX,
-          camBase.baseY + smoothParallaxY * 0.14 - arcPullback * 0.06,
-          camBase.baseZ +
-            framing.camZAdjust * aspectPullbackScale +
-            arcPullback
-        );
-        _lookTarget.set(
-          smoothParallaxX * 0.08 + gazeLeadX,
-          camBase.lookY + framing.lookYAdjust,
-          0
+          desiredCamRadius * Math.sin(camAzimuth),
+          spiralY +
+            camCfg.camOffsetY +
+            introT * 1.15 +
+            smoothParallaxY * 0.18,
+          desiredCamRadius * Math.cos(camAzimuth)
         );
 
-        const targetRoll = THREE.MathUtils.clamp(
-          -deltaOffset * 0.016 + smoothParallaxX * 0.006,
-          -0.022,
-          0.022
+        const focusWeight = 1 - camCfg.axisBlend;
+        _lookTarget.set(
+          HELIX_RADIUS * focusWeight * Math.sin(spiralAngle) +
+            smoothParallaxX * 0.08,
+          spiralY + framing.lookYAdjust + (overview ? 0.1 : -0.04),
+          HELIX_RADIUS * focusWeight * Math.cos(spiralAngle)
         );
 
         let colorAlpha = 1;
         if (prefersReducedMotion || isSoftwareGl) {
           _camCurrentPos.copy(_camTargetPos);
           _lookCurrent.copy(_lookTarget);
-          smoothRoll = 0;
         } else {
-          const posAlpha = 1 - Math.exp(-5.4 * delta);
+          const posAlpha = 1 - Math.exp(-5.6 * delta);
           const lookAlpha = 1 - Math.exp(-6.8 * delta);
           colorAlpha = 1 - Math.exp(-8.5 * delta);
 
           _camCurrentPos.lerp(_camTargetPos, posAlpha);
           _lookCurrent.lerp(_lookTarget, lookAlpha);
-          smoothRoll = THREE.MathUtils.damp(smoothRoll, targetRoll, 5.2, delta);
 
           if (
-            _camCurrentPos.distanceToSquared(_camTargetPos) > 0.000001 ||
-            _lookCurrent.distanceToSquared(_lookTarget) > 0.000001 ||
-            Math.abs(smoothRoll - targetRoll) > 0.0003
+            _camCurrentPos.distanceToSquared(_camTargetPos) > 0.000004 ||
+            _lookCurrent.distanceToSquared(_lookTarget) > 0.000004
           ) {
             renderDirty = true;
           } else {
             _camCurrentPos.copy(_camTargetPos);
             _lookCurrent.copy(_lookTarget);
-            smoothRoll = targetRoll;
           }
         }
 
         camera.position.copy(_camCurrentPos);
         camera.lookAt(_lookCurrent);
-        if (Math.abs(smoothRoll) > 0.0001) {
-          camera.rotation.z += smoothRoll;
-        }
 
-        const colorAnimating = applyCarouselLayout(currentOffset, colorAlpha);
+        // Keep directional studio key & rim light rotating cleanly with camera around the 360° helix
+        const keyAzimuth = camAzimuth + 0.58;
+        keyLight.position.set(
+          Math.sin(keyAzimuth) * 8.2,
+          _camCurrentPos.y + 4.8,
+          Math.cos(keyAzimuth) * 8.2
+        );
+        keyLight.target.position.set(0, _lookCurrent.y, 0);
+        keyLight.target.updateMatrixWorld();
+
+        const rimAzimuth = camAzimuth - 2.35;
+        rimLight.position.set(
+          Math.sin(rimAzimuth) * 7.5,
+          _camCurrentPos.y + 2.2,
+          Math.cos(rimAzimuth) * 7.5
+        );
+
+        const colorAnimating = updateHelixVisibilityAndHighlights(
+          currentOffset,
+          colorAlpha,
+          overview
+        );
         if (colorAnimating) {
           renderDirty = true;
         }
 
         if (composer && dofPass) {
-          dofPass.setFocus(Math.max(1.5, _camCurrentPos.z - 0.04));
-          dofPass.uniforms.maxBlur.value = width < 640 ? 0.0038 : 0.0052;
+          _focusFramePos.set(
+            HELIX_RADIUS * Math.sin(spiralAngle),
+            spiralY,
+            HELIX_RADIUS * Math.cos(spiralAngle)
+          );
+          const focusDist = _camCurrentPos.distanceTo(_focusFramePos);
+          dofPass.setFocus(Math.max(1.5, focusDist - 0.05));
+          dofPass.uniforms.focusDeadZone.value = overview
+            ? 2.8
+            : isMobilePerf
+              ? 0.85
+              : 0.65;
+          dofPass.uniforms.maxBlur.value = overview
+            ? 0.0014
+            : width < 640
+              ? 0.003
+              : 0.0044;
           composer.render();
         } else {
           renderer.render(scene, camera);
@@ -1118,11 +1399,13 @@ export function Exhibition3D({
       const hits = raycaster.intersectObjects(visibleClickableMeshes, false);
       if (hits.length > 0 && typeof hits[0].object.userData.artworkIndex === 'number') {
         const hitIdx = hits[0].object.userData.artworkIndex as number;
-        if (hitIdx === activeIndexRef.current) {
+        if (hitIdx === activeIndexRef.current && !isOverviewRef.current) {
           const selected = artworksRef.current[hitIdx];
           if (selected) onSelectRef.current(selected);
         } else {
-          swiperRef.current?.slideTo(hitIdx);
+          setIsOverview(false);
+          isOverviewRef.current = false;
+          goToIndex(hitIdx);
         }
       }
     };
@@ -1149,8 +1432,8 @@ export function Exhibition3D({
     };
 
     handlePointerParallaxRef.current = (nx: number, ny: number) => {
-      pointerParallaxX = nx * 0.45;
-      pointerParallaxY = ny * 0.35;
+      pointerParallaxX = nx * 0.52;
+      pointerParallaxY = ny * 0.42;
       requestRender();
     };
 
@@ -1209,10 +1492,12 @@ export function Exhibition3D({
       composer?.dispose();
       disposeObject3D(scene);
       sharedPlaceholderTex.dispose();
-      sharedContactShadowMat.dispose();
       sharedPlaqueBlankMat.dispose();
       sharedPlaqueBackGeo.dispose();
       sharedPlaquePlaneGeo.dispose();
+      sharedArmGeo.dispose();
+      sharedClampGeo.dispose();
+      sharedAccentRingGeo.dispose();
       shadowTex.dispose();
       envTarget.dispose();
       renderer.dispose();
@@ -1222,35 +1507,35 @@ export function Exhibition3D({
     };
   }, [artworks, isLoading]);
 
-  const swiperModules = useMemo(() => [FreeMode, Keyboard, Mousewheel], []);
-  const freeModeConfig = useMemo(
-    () => ({
-      enabled: true,
-      momentum: true,
-      momentumRatio: 0.9,
-      momentumVelocityRatio: 0.9,
-      momentumBounce: true,
-      momentumBounceRatio: 0.7,
-      minimumVelocity: 0.02,
-      sticky: true,
-    }),
-    []
-  );
-  const keyboardConfig = useMemo(
-    () => ({ enabled: !isModalOpen }),
-    [isModalOpen]
-  );
-  const mousewheelConfig = useMemo(
-    () => ({ forceToAxis: true, sensitivity: 1 }),
-    []
-  );
+  // Pointer drag + inertia gesture state
+  const pointerStateRef = useRef<{
+    activeId: number | null;
+    startX: number;
+    startY: number;
+    lastX: number;
+    lastY: number;
+    lastTime: number;
+    downTime: number;
+    totalMove: number;
+    emaVel: number;
+  }>({
+    activeId: null,
+    startX: 0,
+    startY: 0,
+    lastX: 0,
+    lastY: 0,
+    lastTime: 0,
+    downTime: 0,
+    totalMove: 0,
+    emaVel: 0,
+  });
 
   if (isLoading) {
     return (
       <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#EAE0CA] border-b border-[#221B15]/20 flex items-center justify-center px-6">
         <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] px-6 py-4 shadow-[4px_4px_0px_rgba(34,27,21,0.1)] text-center">
           <p className="font-mono-retro text-[11px] uppercase tracking-[0.14em] text-[#B84A27]">
-            3D Exhibition Stage
+            3D Helical Rotunda
           </p>
           <p className="mt-1 font-serif-editorial text-lg text-[#221B15]">
             Loading curation…
@@ -1303,22 +1588,18 @@ export function Exhibition3D({
     hoveredIndex !== null ? artworks[hoveredIndex] : undefined;
 
   const handlePrev = () => {
-    const swiper = swiperRef.current;
-    if (!swiper) return;
     if (activeIndex <= 0) {
-      swiper.slideTo(artworks.length - 1);
+      goToIndex(artworks.length - 1);
     } else {
-      swiper.slidePrev();
+      goToIndex(activeIndex - 1);
     }
   };
 
   const handleNext = () => {
-    const swiper = swiperRef.current;
-    if (!swiper) return;
     if (activeIndex >= artworks.length - 1) {
-      swiper.slideTo(0);
+      goToIndex(0);
     } else {
-      swiper.slideNext();
+      goToIndex(activeIndex + 1);
     }
   };
 
@@ -1328,129 +1609,159 @@ export function Exhibition3D({
     if (nextIdx === activeIndex) {
       nextIdx = (activeIndex + 1) % artworks.length;
     }
-    swiperRef.current?.slideTo(nextIdx);
+    goToIndex(nextIdx);
   };
 
   const interactionHint = hoveredArtwork
-    ? hoveredIndex === activeIndex
+    ? hoveredIndex === activeIndex && !isOverview
       ? `Tap to inspect · ${hoveredArtwork.title}`
-      : `Tap to view · ${hoveredArtwork.title}`
-    : 'Swipe left or right · Tap center frame to inspect';
+      : `Tap to fly to · ${hoveredArtwork.title}`
+    : isOverview
+      ? 'Drag or scroll to orbit spiral · Tap any frame to enter'
+      : 'Drag or scroll to spiral · Tap any frame';
 
   return (
     <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#EAE0CA] border-b border-[#221B15]/20 overflow-hidden select-none">
       {/* Isolated WebGL Container */}
       <div
         ref={mountRef}
-        aria-label="Interactive 3D exhibition carousel"
+        aria-label="Interactive 3D helical exhibition rotunda"
         className="w-full h-full"
       />
 
-      {/* Native-Feel Touch & Swipe Layer Powered by Swiper */}
+      {/* Full-Viewport 2D Drag, Scroll & Raycast Gesture Layer */}
       <div
-        className={`absolute inset-0 z-[5] touch-pan-y ${
-          hoveredIndex !== null ? 'cursor-pointer' : 'cursor-grab active:cursor-grabbing'
+        ref={gestureSurfaceRef}
+        className={`absolute inset-0 z-[5] touch-none ${
+          isDragging
+            ? 'cursor-grabbing'
+            : hoveredIndex !== null
+              ? 'cursor-pointer'
+              : 'cursor-grab'
         }`}
+        onPointerDown={(e) => {
+          if (e.button !== 0 && e.pointerType === 'mouse') return;
+          const ps = pointerStateRef.current;
+          ps.activeId = e.pointerId;
+          ps.startX = e.clientX;
+          ps.startY = e.clientY;
+          ps.lastX = e.clientX;
+          ps.lastY = e.clientY;
+          ps.lastTime = performance.now();
+          ps.downTime = ps.lastTime;
+          ps.totalMove = 0;
+          ps.emaVel = 0;
+
+          isDraggingRef.current = true;
+          setIsDragging(true);
+          momentumVelRef.current = 0;
+          snapTargetRef.current = null;
+          introProgressRef.current = Math.min(introProgressRef.current, 0.2);
+
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+          } catch {
+            // Ignore synthetic capture failures
+          }
+        }}
         onPointerMove={(e) => {
-          if (e.pointerType !== 'mouse') return;
           const rect = e.currentTarget.getBoundingClientRect();
-          const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-          const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-          handlePointerParallaxRef.current?.(nx, ny);
-          handleHoverAtRef.current?.(e.clientX, e.clientY);
+          const ps = pointerStateRef.current;
+
+          if (ps.activeId === e.pointerId && isDraggingRef.current) {
+            const now = performance.now();
+            const dx = e.clientX - ps.lastX;
+            const dy = e.clientY - ps.lastY;
+            const dt = Math.max(0.004, (now - ps.lastTime) / 1000);
+
+            ps.totalMove += Math.hypot(dx, dy);
+            ps.lastX = e.clientX;
+            ps.lastY = e.clientY;
+            ps.lastTime = now;
+
+            const gainBoost = isOverviewRef.current ? 1.45 : 1.0;
+            const scaleX = Math.max(140, rect.width * 0.24);
+            const scaleY = Math.max(160, rect.height * 0.34);
+            const deltaOffset = ((-dx / scaleX) + (-dy / scaleY)) * gainBoost;
+
+            const count = artworksRef.current.length;
+            const maxIdx = Math.max(0, count - 1);
+            targetOffsetRef.current = THREE.MathUtils.clamp(
+              targetOffsetRef.current + deltaOffset,
+              0,
+              maxIdx
+            );
+
+            const instVel = deltaOffset / dt;
+            ps.emaVel = ps.emaVel * 0.62 + instVel * 0.38;
+
+            const nearest = Math.max(
+              0,
+              Math.min(maxIdx, Math.round(targetOffsetRef.current))
+            );
+            if (nearest !== activeIndexRef.current) {
+              activeIndexRef.current = nearest;
+              setActiveIndex(nearest);
+            }
+            requestRenderRef.current?.();
+            return;
+          }
+
+          if (e.pointerType === 'mouse') {
+            const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+            const ny = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+            handlePointerParallaxRef.current?.(nx, ny);
+            handleHoverAtRef.current?.(e.clientX, e.clientY);
+          }
+        }}
+        onPointerUp={(e) => {
+          const ps = pointerStateRef.current;
+          if (ps.activeId !== e.pointerId) return;
+
+          ps.activeId = null;
+          isDraggingRef.current = false;
+          setIsDragging(false);
+
+          try {
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+              e.currentTarget.releasePointerCapture(e.pointerId);
+            }
+          } catch {
+            // Ignore release failures
+          }
+
+          const elapsed = performance.now() - ps.downTime;
+          if (ps.totalMove < 10 && elapsed < 360) {
+            snapTargetRef.current = activeIndexRef.current;
+            handleTapAtRef.current?.(e.clientX, e.clientY);
+            return;
+          }
+
+          if (Math.abs(ps.emaVel) > 0.35) {
+            momentumVelRef.current = THREE.MathUtils.clamp(ps.emaVel, -14, 14);
+          } else {
+            snapTargetRef.current = Math.round(targetOffsetRef.current);
+          }
+          requestRenderRef.current?.();
+        }}
+        onPointerCancel={(e) => {
+          const ps = pointerStateRef.current;
+          if (ps.activeId !== e.pointerId) return;
+          ps.activeId = null;
+          isDraggingRef.current = false;
+          setIsDragging(false);
+          snapTargetRef.current = Math.round(targetOffsetRef.current);
+          requestRenderRef.current?.();
         }}
         onPointerLeave={() => {
-          handlePointerLeaveRef.current?.();
+          if (!isDraggingRef.current) {
+            handlePointerLeaveRef.current?.();
+          }
         }}
-      >
-        <Swiper
-          modules={swiperModules}
-          slidesPerView={1}
-          speed={480}
-          freeMode={freeModeConfig}
-          threshold={5}
-          touchAngle={45}
-          resistance={true}
-          resistanceRatio={0.65}
-          simulateTouch={true}
-          keyboard={keyboardConfig}
-          mousewheel={mousewheelConfig}
-          className="w-full h-full"
-          onSwiper={(swiper) => {
-            swiperRef.current = swiper;
-          }}
-          onTouchStart={() => {
-            isTouchingRef.current = true;
-          }}
-          onTouchEnd={() => {
-            isTouchingRef.current = false;
-            requestRenderRef.current?.();
-          }}
-          onProgress={(_swiper, progress) => {
-            const count = artworksRef.current.length;
-            const rawOffset = count <= 1 ? 0 : progress * (count - 1);
-            targetOffsetRef.current =
-              count <= 1
-                ? 0
-                : THREE.MathUtils.clamp(rawOffset, -0.14, count - 1 + 0.14);
-
-            if (count > 0) {
-              const nearestIdx = Math.max(
-                0,
-                Math.min(count - 1, Math.round(rawOffset))
-              );
-              if (nearestIdx !== activeIndexRef.current) {
-                activeIndexRef.current = nearestIdx;
-                setActiveIndex(nearestIdx);
-              }
-            }
-            requestRenderRef.current?.();
-          }}
-          onSlideChange={(swiper) => {
-            const count = artworksRef.current.length;
-            const idx = Math.max(0, Math.min(count - 1, swiper.activeIndex));
-            activeIndexRef.current = idx;
-            setActiveIndex(idx);
-            if (!isTouchingRef.current && !swiper.animating) {
-              targetOffsetRef.current = idx;
-            }
-            requestRenderRef.current?.();
-          }}
-          onTransitionEnd={(swiper) => {
-            const count = artworksRef.current.length;
-            const idx = Math.max(0, Math.min(count - 1, swiper.activeIndex));
-            activeIndexRef.current = idx;
-            setActiveIndex(idx);
-            targetOffsetRef.current = idx;
-            requestRenderRef.current?.();
-          }}
-          onTap={(_swiper, event) => {
-            let clientX: number | undefined;
-            let clientY: number | undefined;
-            if ('changedTouches' in event && event.changedTouches.length > 0) {
-              clientX = event.changedTouches[0].clientX;
-              clientY = event.changedTouches[0].clientY;
-            } else if ('clientX' in event) {
-              clientX = event.clientX;
-              clientY = event.clientY;
-            }
-            if (typeof clientX === 'number' && typeof clientY === 'number') {
-              handleTapAtRef.current?.(clientX, clientY);
-            }
-          }}
-        >
-          {artworks.map((artwork, index) => (
-            <SwiperSlide
-              key={artwork.id}
-              aria-label={`Slide ${index + 1} of ${artworks.length}: ${artwork.title}`}
-              className="w-full h-full"
-            />
-          ))}
-        </Swiper>
-      </div>
+      />
 
       {/* Top-Left Compact Exhibition Plaque (No backdrop-blur over WebGL) */}
-      <div className="pointer-events-none absolute top-2.5 left-2.5 sm:top-5 sm:left-6 z-10 max-w-[min(420px,calc(100%-1.25rem))] bg-[#F8F3E6]/95 border border-[#221B15]/25 px-2.5 py-1.5 sm:px-4 sm:py-2.5 rounded-[2px] shadow-[2px_2px_0px_rgba(34,27,21,0.12)]">
+      <div className="pointer-events-none absolute top-2.5 left-2.5 sm:top-5 sm:left-6 z-10 max-w-[min(440px,calc(100%-1.25rem))] bg-[#F8F3E6]/95 border border-[#221B15]/25 px-2.5 py-1.5 sm:px-4 sm:py-2.5 rounded-[2px] shadow-[2px_2px_0px_rgba(34,27,21,0.12)]">
         {(aboutKicker || aboutPeriod) && (
           <p className="hidden sm:block font-mono-retro text-[10px] uppercase tracking-[0.14em] text-[#B84A27] truncate">
             <span>{aboutKicker}</span>
@@ -1473,7 +1784,7 @@ export function Exhibition3D({
 
       {/* Collapsible Bottom Thumb-Zone Dock (Zero Viewport Occlusion) */}
       <div
-        className={`absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-5 z-10 w-[min(700px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-5 z-10 w-[min(760px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isDockCollapsed ? 'translate-y-[calc(100%-30px)]' : 'translate-y-0'
         }`}
       >
@@ -1511,7 +1822,10 @@ export function Exhibition3D({
                     key={artwork.id}
                     type="button"
                     data-film-index={index}
-                    onClick={() => swiperRef.current?.slideTo(index)}
+                    onClick={() => {
+                      setIsOverview(false);
+                      goToIndex(index);
+                    }}
                     aria-label={`Jump to frame ${index + 1}: ${artwork.title}`}
                     className={`relative shrink-0 snap-center w-14 h-10 overflow-hidden rounded-[1px] border transition-all ${
                       isSelected
@@ -1536,14 +1850,14 @@ export function Exhibition3D({
             </div>
           )}
 
-          <div className="flex items-center justify-between gap-1.5 sm:gap-3">
+          <div className="flex items-center justify-between gap-1.5 sm:gap-2.5">
             <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={handlePrev}
                 disabled={artworks.length <= 1}
                 aria-label="Previous artwork"
-                className="min-h-[44px] min-w-[40px] sm:min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+                className="min-h-[44px] min-w-[38px] sm:min-w-[42px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1552,7 +1866,7 @@ export function Exhibition3D({
                 onClick={handleNext}
                 disabled={artworks.length <= 1}
                 aria-label="Next artwork"
-                className="min-h-[44px] min-w-[40px] sm:min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+                className="min-h-[44px] min-w-[38px] sm:min-w-[42px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
               >
                 <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1568,7 +1882,22 @@ export function Exhibition3D({
               </p>
             </div>
 
-            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => setIsOverview((v) => !v)}
+                aria-pressed={isOverview}
+                aria-label={isOverview ? 'Zoom into artwork' : 'Open Atrium spiral overview'}
+                className={`min-h-[44px] min-w-[42px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] border rounded-[2px] transition-colors whitespace-nowrap ${
+                  isOverview
+                    ? 'bg-[#221B15] text-[#F8F3E6] border-[#221B15]'
+                    : 'bg-[#EFE6D2] text-[#221B15] border-[#221B15]/25 hover:bg-[#E3D7BE]'
+                }`}
+              >
+                <Compass className="w-3.5 h-3.5" aria-hidden="true" />
+                <span className="hidden md:inline">Atrium</span>
+              </button>
+
               {artworks.length > 1 && (
                 <>
                   <button
@@ -1576,7 +1905,7 @@ export function Exhibition3D({
                     onClick={() => setIsFilmstripOpen((v) => !v)}
                     aria-pressed={isFilmstripOpen}
                     aria-label={isFilmstripOpen ? 'Close filmstrip roll' : 'Open filmstrip roll'}
-                    className={`min-h-[44px] min-w-[44px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] border rounded-[2px] transition-colors whitespace-nowrap ${
+                    className={`min-h-[44px] min-w-[42px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] border rounded-[2px] transition-colors whitespace-nowrap ${
                       isFilmstripOpen
                         ? 'bg-[#221B15] text-[#F8F3E6] border-[#221B15]'
                         : 'bg-[#EFE6D2] text-[#221B15] border-[#221B15]/25 hover:bg-[#E3D7BE]'
@@ -1589,8 +1918,8 @@ export function Exhibition3D({
                   <button
                     type="button"
                     onClick={handleShuffle}
-                    aria-label="Jump to random artwork"
-                    className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/25 bg-[#EFE6D2] text-[#221B15] hover:bg-[#E3D7BE] hover:text-[#B84A27] rounded-[2px] transition-colors"
+                    aria-label="Fly to random artwork"
+                    className="hidden sm:inline-flex min-h-[44px] min-w-[42px] items-center justify-center border border-[#221B15]/25 bg-[#EFE6D2] text-[#221B15] hover:bg-[#E3D7BE] hover:text-[#B84A27] rounded-[2px] transition-colors"
                   >
                     <Shuffle className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -1601,7 +1930,7 @@ export function Exhibition3D({
                 type="button"
                 onClick={() => currentArtwork && onSelectArtwork(currentArtwork)}
                 aria-label="Inspect current artwork"
-                className="min-h-[44px] min-w-[44px] sm:px-3.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap"
+                className="min-h-[44px] min-w-[42px] sm:px-3.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap"
               >
                 <Expand className="w-3.5 h-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">Inspect</span>
@@ -1611,7 +1940,7 @@ export function Exhibition3D({
                 type="button"
                 onClick={onExit3D}
                 aria-label="Switch to Grid View"
-                className="min-h-[44px] min-w-[44px] sm:px-3 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#221B15] bg-[#EFE6D2] hover:bg-[#E3D7BE] border border-[#221B15]/25 rounded-[2px] transition-colors whitespace-nowrap"
+                className="min-h-[44px] min-w-[42px] sm:px-3 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#221B15] bg-[#EFE6D2] hover:bg-[#E3D7BE] border border-[#221B15]/25 rounded-[2px] transition-colors whitespace-nowrap"
               >
                 <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">Grid</span>
@@ -1632,10 +1961,10 @@ export function Exhibition3D({
                   max={artworks.length - 1}
                   step={1}
                   value={activeIndex}
-                  aria-label="Scrub through artworks"
+                  aria-label="Spiral through artworks"
                   onChange={(e) => {
-                    const nextIdx = Number(e.target.value);
-                    swiperRef.current?.slideTo(nextIdx);
+                    setIsOverview(false);
+                    goToIndex(Number(e.target.value));
                   }}
                   className="flex-1 h-2 accent-[#B84A27] cursor-pointer"
                 />
@@ -1659,7 +1988,10 @@ export function Exhibition3D({
                       role="tab"
                       aria-selected={isSelected}
                       aria-label={`View frame ${index + 1}: ${artwork.title}`}
-                      onClick={() => swiperRef.current?.slideTo(index)}
+                      onClick={() => {
+                        setIsOverview(false);
+                        goToIndex(index);
+                      }}
                       className={`h-1.5 flex-1 rounded-[1px] transition-colors ${
                         isSelected
                           ? 'bg-[#B84A27]'
