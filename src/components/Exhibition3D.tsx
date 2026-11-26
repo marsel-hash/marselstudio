@@ -15,7 +15,9 @@ import {
   ChevronRight,
   ChevronUp,
   Expand,
+  Film,
   LayoutGrid,
+  Shuffle,
 } from 'lucide-react';
 import type { Artwork } from '../types/gallery';
 import { SubtleDepthOfFieldPass } from '../utils/depthOfFieldPass';
@@ -183,10 +185,12 @@ export function Exhibition3D({
 }: Exhibition3DProps) {
   const mountRef = useRef<HTMLDivElement | null>(null);
   const swiperRef = useRef<SwiperInstance | null>(null);
+  const filmstripRef = useRef<HTMLDivElement | null>(null);
 
   const [activeIndex, setActiveIndex] = useState(0);
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [isDockCollapsed, setIsDockCollapsed] = useState(false);
+  const [isFilmstripOpen, setIsFilmstripOpen] = useState(false);
   const [webglUnsupported, setWebglUnsupported] = useState(false);
 
   const activeIndexRef = useRef(0);
@@ -212,6 +216,24 @@ export function Exhibition3D({
     targetOffsetRef.current = 0;
     swiperRef.current?.slideTo(0, 0);
   }, [artworks]);
+
+  useEffect(() => {
+    if (!isFilmstripOpen || !filmstripRef.current) return;
+    const container = filmstripRef.current;
+    const activeBtn = container.querySelector<HTMLButtonElement>(
+      `[data-film-index="${activeIndex}"]`
+    );
+    if (activeBtn) {
+      const targetLeft =
+        activeBtn.offsetLeft -
+        container.clientWidth / 2 +
+        activeBtn.clientWidth / 2;
+      container.scrollTo({
+        left: Math.max(0, targetLeft),
+        behavior: 'smooth',
+      });
+    }
+  }, [isFilmstripOpen, activeIndex]);
 
   useEffect(() => {
     if (isLoading || artworks.length === 0) return;
@@ -1225,7 +1247,7 @@ export function Exhibition3D({
 
   if (isLoading) {
     return (
-      <div className="relative w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[460px] bg-[#EAE0CA] border-b border-[#221B15]/20 flex items-center justify-center px-6">
+      <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#EAE0CA] border-b border-[#221B15]/20 flex items-center justify-center px-6">
         <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] px-6 py-4 shadow-[4px_4px_0px_rgba(34,27,21,0.1)] text-center">
           <p className="font-mono-retro text-[11px] uppercase tracking-[0.14em] text-[#B84A27]">
             3D Exhibition Stage
@@ -1240,7 +1262,7 @@ export function Exhibition3D({
 
   if (artworks.length === 0) {
     return (
-      <div className="w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
+      <div className="w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
         <div className="py-12 px-8 text-center bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.1)]">
           <p className="font-serif-editorial text-2xl text-[#221B15]">
             No artworks in this category yet.
@@ -1259,7 +1281,7 @@ export function Exhibition3D({
 
   if (webglUnsupported) {
     return (
-      <div className="w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
+      <div className="w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
         <div className="p-8 text-center bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.12)] max-w-md">
           <p className="font-serif-editorial text-xl text-[#221B15]">
             3D Exhibition requires WebGL support in your browser.
@@ -1300,6 +1322,15 @@ export function Exhibition3D({
     }
   };
 
+  const handleShuffle = () => {
+    if (artworks.length <= 1) return;
+    let nextIdx = Math.floor(Math.random() * artworks.length);
+    if (nextIdx === activeIndex) {
+      nextIdx = (activeIndex + 1) % artworks.length;
+    }
+    swiperRef.current?.slideTo(nextIdx);
+  };
+
   const interactionHint = hoveredArtwork
     ? hoveredIndex === activeIndex
       ? `Tap to inspect · ${hoveredArtwork.title}`
@@ -1307,7 +1338,7 @@ export function Exhibition3D({
     : 'Swipe left or right · Tap center frame to inspect';
 
   return (
-    <div className="relative w-full h-[calc(100dvh-9.5rem)] md:h-[calc(100dvh-6.75rem)] min-h-[460px] bg-[#EAE0CA] border-b border-[#221B15]/20 overflow-hidden select-none">
+    <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#EAE0CA] border-b border-[#221B15]/20 overflow-hidden select-none">
       {/* Isolated WebGL Container */}
       <div
         ref={mountRef}
@@ -1419,9 +1450,9 @@ export function Exhibition3D({
       </div>
 
       {/* Top-Left Compact Exhibition Plaque (No backdrop-blur over WebGL) */}
-      <div className="pointer-events-none absolute top-3 left-3 sm:top-5 sm:left-6 z-10 max-w-[min(420px,calc(100%-1.5rem))] bg-[#F8F3E6]/95 border border-[#221B15]/25 px-3 py-2 sm:px-4 sm:py-2.5 rounded-[2px] shadow-[2px_2px_0px_rgba(34,27,21,0.12)]">
+      <div className="pointer-events-none absolute top-2.5 left-2.5 sm:top-5 sm:left-6 z-10 max-w-[min(420px,calc(100%-1.25rem))] bg-[#F8F3E6]/95 border border-[#221B15]/25 px-2.5 py-1.5 sm:px-4 sm:py-2.5 rounded-[2px] shadow-[2px_2px_0px_rgba(34,27,21,0.12)]">
         {(aboutKicker || aboutPeriod) && (
-          <p className="font-mono-retro text-[9.5px] sm:text-[10px] uppercase tracking-[0.14em] text-[#B84A27] truncate">
+          <p className="hidden sm:block font-mono-retro text-[10px] uppercase tracking-[0.14em] text-[#B84A27] truncate">
             <span>{aboutKicker}</span>
             {aboutPeriod && (
               <>
@@ -1431,17 +1462,18 @@ export function Exhibition3D({
             )}
           </p>
         )}
-        <h1 className="mt-0.5 font-serif-editorial text-base sm:text-xl font-semibold leading-tight text-[#221B15] truncate">
+        <h1 className="font-serif-editorial text-[15px] sm:text-xl font-semibold leading-tight text-[#221B15] truncate">
           {heroTitle}
         </h1>
         <p className="mt-0.5 font-mono-retro text-[9.5px] sm:text-[10px] uppercase tracking-[0.08em] text-[#635443] truncate">
-          {activeCategory} · {artworks.length} {artworks.length === 1 ? 'Work' : 'Works'} · {interactionHint}
+          {activeCategory} · {artworks.length} {artworks.length === 1 ? 'Work' : 'Works'}
+          <span className="hidden sm:inline"> · {interactionHint}</span>
         </p>
       </div>
 
       {/* Collapsible Bottom Thumb-Zone Dock (Zero Viewport Occlusion) */}
       <div
-        className={`absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-5 z-10 w-[min(680px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-5 z-10 w-[min(700px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isDockCollapsed ? 'translate-y-[calc(100%-30px)]' : 'translate-y-0'
         }`}
       >
@@ -1466,14 +1498,52 @@ export function Exhibition3D({
         </div>
 
         <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.16)] px-2.5 py-2 sm:px-4 sm:py-3 space-y-2">
-          <div className="flex items-center justify-between gap-2 sm:gap-3">
-            <div className="flex items-center gap-1.5 shrink-0">
+          {isFilmstripOpen && artworks.length > 1 && (
+            <div
+              ref={filmstripRef}
+              aria-label="35mm contact sheet quick jump"
+              className="flex items-center gap-1.5 overflow-x-auto no-scrollbar snap-x py-1.5 px-1.5 bg-[#221B15] rounded-[2px]"
+            >
+              {artworks.map((artwork, index) => {
+                const isSelected = index === activeIndex;
+                return (
+                  <button
+                    key={artwork.id}
+                    type="button"
+                    data-film-index={index}
+                    onClick={() => swiperRef.current?.slideTo(index)}
+                    aria-label={`Jump to frame ${index + 1}: ${artwork.title}`}
+                    className={`relative shrink-0 snap-center w-14 h-10 overflow-hidden rounded-[1px] border transition-all ${
+                      isSelected
+                        ? 'border-[#B84A27] ring-1 ring-[#B84A27] opacity-100 scale-[1.03]'
+                        : 'border-[#F8F3E6]/20 opacity-65 hover:opacity-100'
+                    }`}
+                  >
+                    <img
+                      src={artwork.src}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                      referrerPolicy="no-referrer"
+                      className="w-full h-full object-cover"
+                    />
+                    <span className="absolute bottom-0 right-0 px-1 bg-[#221B15]/85 font-mono-retro text-[8px] leading-tight text-[#F8F3E6] tabular-nums">
+                      {String(index + 1).padStart(2, '0')}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-1.5 sm:gap-3">
+            <div className="flex items-center gap-1 shrink-0">
               <button
                 type="button"
                 onClick={handlePrev}
                 disabled={artworks.length <= 1}
                 aria-label="Previous artwork"
-                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+                className="min-h-[44px] min-w-[40px] sm:min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1482,7 +1552,7 @@ export function Exhibition3D({
                 onClick={handleNext}
                 disabled={artworks.length <= 1}
                 aria-label="Next artwork"
-                className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+                className="min-h-[44px] min-w-[40px] sm:min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
               >
                 <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -1498,21 +1568,50 @@ export function Exhibition3D({
               </p>
             </div>
 
-            <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            <div className="flex items-center gap-1 sm:gap-2 shrink-0">
+              {artworks.length > 1 && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => setIsFilmstripOpen((v) => !v)}
+                    aria-pressed={isFilmstripOpen}
+                    aria-label={isFilmstripOpen ? 'Close filmstrip roll' : 'Open filmstrip roll'}
+                    className={`min-h-[44px] min-w-[44px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] border rounded-[2px] transition-colors whitespace-nowrap ${
+                      isFilmstripOpen
+                        ? 'bg-[#221B15] text-[#F8F3E6] border-[#221B15]'
+                        : 'bg-[#EFE6D2] text-[#221B15] border-[#221B15]/25 hover:bg-[#E3D7BE]'
+                    }`}
+                  >
+                    <Film className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span className="hidden md:inline">Roll</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleShuffle}
+                    aria-label="Jump to random artwork"
+                    className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center border border-[#221B15]/25 bg-[#EFE6D2] text-[#221B15] hover:bg-[#E3D7BE] hover:text-[#B84A27] rounded-[2px] transition-colors"
+                  >
+                    <Shuffle className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </>
+              )}
+
               <button
                 type="button"
                 onClick={() => currentArtwork && onSelectArtwork(currentArtwork)}
-                className="min-h-[44px] px-3 sm:px-3.5 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap"
+                aria-label="Inspect current artwork"
+                className="min-h-[44px] min-w-[44px] sm:px-3.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap"
               >
                 <Expand className="w-3.5 h-3.5" aria-hidden="true" />
-                <span>Inspect</span>
+                <span className="hidden sm:inline">Inspect</span>
               </button>
 
               <button
                 type="button"
                 onClick={onExit3D}
                 aria-label="Switch to Grid View"
-                className="min-h-[44px] px-2.5 sm:px-3 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#221B15] bg-[#EFE6D2] hover:bg-[#E3D7BE] border border-[#221B15]/25 rounded-[2px] transition-colors whitespace-nowrap"
+                className="min-h-[44px] min-w-[44px] sm:px-3 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#221B15] bg-[#EFE6D2] hover:bg-[#E3D7BE] border border-[#221B15]/25 rounded-[2px] transition-colors whitespace-nowrap"
               >
                 <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">Grid</span>
@@ -1521,30 +1620,56 @@ export function Exhibition3D({
           </div>
 
           {artworks.length > 1 && (
-            <div
-              role="tablist"
-              aria-label="Jump to frame"
-              className="flex items-center gap-1.5 pt-0.5"
-            >
-              {artworks.map((artwork, index) => {
-                const isSelected = index === activeIndex;
-                return (
-                  <button
-                    key={artwork.id}
-                    type="button"
-                    role="tab"
-                    aria-selected={isSelected}
-                    aria-label={`View frame ${index + 1}: ${artwork.title}`}
-                    onClick={() => swiperRef.current?.slideTo(index)}
-                    className={`h-1.5 flex-1 rounded-[1px] transition-colors ${
-                      isSelected
-                        ? 'bg-[#B84A27]'
-                        : 'bg-[#221B15]/15 hover:bg-[#221B15]/35'
-                    }`}
-                  />
-                );
-              })}
-            </div>
+            <>
+              {/* Mobile Thumb-Friendly Film Scrubber */}
+              <div className="sm:hidden flex items-center gap-2.5 pt-0.5">
+                <span className="font-mono-retro text-[9.5px] tabular-nums text-[#635443]">
+                  01
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={artworks.length - 1}
+                  step={1}
+                  value={activeIndex}
+                  aria-label="Scrub through artworks"
+                  onChange={(e) => {
+                    const nextIdx = Number(e.target.value);
+                    swiperRef.current?.slideTo(nextIdx);
+                  }}
+                  className="flex-1 h-2 accent-[#B84A27] cursor-pointer"
+                />
+                <span className="font-mono-retro text-[9.5px] tabular-nums text-[#635443]">
+                  {String(artworks.length).padStart(2, '0')}
+                </span>
+              </div>
+
+              {/* Desktop Segment Jump Tabs */}
+              <div
+                role="tablist"
+                aria-label="Jump to frame"
+                className="hidden sm:flex items-center gap-1.5 pt-0.5"
+              >
+                {artworks.map((artwork, index) => {
+                  const isSelected = index === activeIndex;
+                  return (
+                    <button
+                      key={artwork.id}
+                      type="button"
+                      role="tab"
+                      aria-selected={isSelected}
+                      aria-label={`View frame ${index + 1}: ${artwork.title}`}
+                      onClick={() => swiperRef.current?.slideTo(index)}
+                      className={`h-1.5 flex-1 rounded-[1px] transition-colors ${
+                        isSelected
+                          ? 'bg-[#B84A27]'
+                          : 'bg-[#221B15]/15 hover:bg-[#221B15]/35'
+                      }`}
+                    />
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
       </div>

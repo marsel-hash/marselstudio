@@ -1,5 +1,14 @@
 import { lazy, Suspense, useEffect, useMemo, useState } from 'react';
-import { Box, Columns2, Columns3, LayoutGrid } from 'lucide-react';
+import {
+  ArrowUp,
+  Box,
+  Camera,
+  Columns2,
+  Columns3,
+  LayoutGrid,
+  Shuffle,
+  Square,
+} from 'lucide-react';
 import { onAuthStateChanged, type User } from 'firebase/auth';
 import { auth, BOOTSTRAPPED_ADMIN_EMAIL } from './firebase';
 import { DEFAULT_ARTWORKS } from './data/artworks';
@@ -68,6 +77,9 @@ export default function App() {
   const [selectedArtworkId, setSelectedArtworkId] = useState<string | null>(null);
   const [isAboutOpen, setIsAboutOpen] = useState(false);
   const [desktopColumns, setDesktopColumns] = useState<2 | 3>(3);
+  const [mobileColumns, setMobileColumns] = useState<1 | 2 | 3>(2);
+  const [showMobileCamera, setShowMobileCamera] = useState(false);
+  const [showScrollActions, setShowScrollActions] = useState(false);
   const [showCaptions, setShowCaptions] = useState(true);
   const [viewMode, setViewMode] = useState<'3d' | 'grid'>('3d');
   const [isAdminOpen, setIsAdminOpen] = useState(() => {
@@ -76,6 +88,19 @@ export default function App() {
       window.location.pathname === '/admin' || window.location.hash === '#admin'
     );
   });
+
+  useEffect(() => {
+    if (viewMode !== 'grid') {
+      setShowScrollActions(false);
+      return;
+    }
+    const handleScroll = () => {
+      setShowScrollActions(window.scrollY > 340);
+    };
+    handleScroll();
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, [viewMode]);
 
   useEffect(() => {
     const syncAdminFromUrl = () => {
@@ -239,6 +264,19 @@ export default function App() {
     }
   };
 
+  const handleShuffleOpen = () => {
+    if (filteredArtworks.length === 0) return;
+    if (filteredArtworks.length === 1) {
+      setSelectedArtworkId(filteredArtworks[0].id);
+      return;
+    }
+    let idx = Math.floor(Math.random() * filteredArtworks.length);
+    if (filteredArtworks[idx].id === selectedArtworkId) {
+      idx = (idx + 1) % filteredArtworks.length;
+    }
+    setSelectedArtworkId(filteredArtworks[idx].id);
+  };
+
   const mobileCategories = ['All', ...siteConfig.categories];
 
   return (
@@ -353,8 +391,8 @@ export default function App() {
           className="flex-1 w-full max-w-6xl mx-auto px-4 sm:px-8 lg:px-12"
         >
           {/* Editorial Exhibition Hero (Secondary Grid Archive Mode) */}
-          <section className="pt-6 pb-4 sm:pt-9 sm:pb-5">
-            <div className="relative bg-[#F8F3E6]/80 border border-[#221B15]/25 rounded-[2px] px-5 py-6 sm:px-9 sm:py-9 shadow-[4px_4px_0px_rgba(34,27,21,0.08)]">
+          <section className="pt-3.5 pb-2.5 sm:pt-9 sm:pb-5">
+            <div className="relative bg-[#F8F3E6]/80 border border-[#221B15]/25 rounded-[2px] px-4 py-4 sm:px-9 sm:py-9 shadow-[4px_4px_0px_rgba(34,27,21,0.08)]">
               <span
                 aria-hidden="true"
                 className="pointer-events-none absolute top-2 left-2 w-2.5 h-2.5 border-t border-l border-[#221B15]/40"
@@ -372,10 +410,10 @@ export default function App() {
                 className="pointer-events-none absolute bottom-2 right-2 w-2.5 h-2.5 border-b border-r border-[#221B15]/40"
               />
 
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 sm:gap-6">
                 <div className="max-w-2xl">
                   {(siteConfig.aboutKicker || siteConfig.aboutPeriod) && (
-                    <p className="font-mono-retro text-[11px] uppercase tracking-[0.14em] text-[#B84A27] mb-3">
+                    <p className="font-mono-retro text-[10px] sm:text-[11px] uppercase tracking-[0.14em] text-[#B84A27] mb-1.5 sm:mb-3">
                       <span>{siteConfig.aboutKicker}</span>
                       {siteConfig.aboutPeriod && (
                         <>
@@ -387,15 +425,31 @@ export default function App() {
                       )}
                     </p>
                   )}
-                  <h1 className="font-serif-editorial text-[34px] sm:text-[48px] lg:text-[54px] font-semibold leading-[1.06] tracking-[-0.02em] text-[#221B15] text-balance">
+                  <h1 className="font-serif-editorial text-[26px] sm:text-[48px] lg:text-[54px] font-semibold leading-[1.08] tracking-[-0.02em] text-[#221B15] text-balance">
                     {siteConfig.heroTitle}
                   </h1>
-                  <p className="mt-3 sm:mt-4 max-w-xl text-[14px] sm:text-[15.5px] leading-[1.68] text-[#4D4135]">
+                  <p className="mt-2 sm:mt-4 max-w-xl text-[13.5px] sm:text-[15.5px] leading-[1.55] sm:leading-[1.68] text-[#4D4135] line-clamp-2 sm:line-clamp-none">
                     {siteConfig.heroSubtitle}
                   </p>
+
+                  <div className="sm:hidden mt-3 flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowMobileCamera((v) => !v)}
+                      aria-expanded={showMobileCamera}
+                      className="min-h-[36px] px-2.5 inline-flex items-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#EFE6D2] text-[#221B15] border border-[#221B15]/25 rounded-[2px] hover:border-[#B84A27] transition-colors"
+                    >
+                      <Camera className="w-3.5 h-3.5 text-[#B84A27]" aria-hidden="true" />
+                      <span>{showMobileCamera ? 'Hide 3D Camera' : 'Inspect 3D Camera'}</span>
+                    </button>
+                  </div>
                 </div>
 
-                <div className="flex items-center justify-center sm:justify-end">
+                <div
+                  className={`${
+                    showMobileCamera ? 'flex' : 'hidden sm:flex'
+                  } items-center justify-center sm:justify-end`}
+                >
                   <Suspense fallback={<div className="w-64 h-44 sm:h-48 lg:h-52" />}>
                     <RetroCamera3D />
                   </Suspense>
@@ -405,7 +459,7 @@ export default function App() {
               {configReady && (
                 <nav
                   aria-label="Category filter"
-                  className="md:hidden mt-6 -mx-5 px-5 flex items-center gap-5 overflow-x-auto no-scrollbar border-t border-[#221B15]/15 pt-1"
+                  className="md:hidden mt-3.5 sm:mt-6 -mx-4 sm:-mx-5 px-4 sm:px-5 flex items-center gap-5 overflow-x-auto no-scrollbar border-t border-[#221B15]/15 pt-1"
                 >
                   {mobileCategories.map((category) => {
                     const isActive = activeCategory === category;
@@ -415,7 +469,7 @@ export default function App() {
                         type="button"
                         onClick={() => setActiveCategory(category)}
                         aria-pressed={isActive}
-                        className={`relative min-h-[44px] py-2 font-mono-retro text-[12px] uppercase tracking-[0.08em] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] ${
+                        className={`relative min-h-[40px] py-2 font-mono-retro text-[11px] uppercase tracking-[0.08em] transition-colors whitespace-nowrap shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] ${
                           isActive
                             ? 'text-[#221B15] font-medium'
                             : 'text-[#635443]'
@@ -437,10 +491,10 @@ export default function App() {
 
             <div
               aria-hidden="true"
-              className="mt-5 bg-[#221B15] border border-[#221B15] rounded-[2px] overflow-hidden shadow-[2px_2px_0px_rgba(34,27,21,0.14)]"
+              className="mt-3 sm:mt-5 bg-[#221B15] border border-[#221B15] rounded-[2px] overflow-hidden shadow-[2px_2px_0px_rgba(34,27,21,0.14)]"
             >
-              <div className="h-2.5 film-sprockets opacity-85" />
-              <div className="px-3.5 sm:px-5 py-1.5 flex items-center justify-between gap-4 font-mono-retro text-[10px] uppercase tracking-[0.16em] text-[#E3D7BE]">
+              <div className="h-2 sm:h-2.5 film-sprockets opacity-85" />
+              <div className="px-3.5 sm:px-5 py-1 sm:py-1.5 flex items-center justify-between gap-4 font-mono-retro text-[10px] uppercase tracking-[0.16em] text-[#E3D7BE]">
                 <span className="truncate">
                   <span className="text-[#B84A27]">▸</span> Contact Sheet · 35mm
                 </span>
@@ -455,12 +509,12 @@ export default function App() {
                     : 'Frame 00'}
                 </span>
               </div>
-              <div className="h-2.5 film-sprockets opacity-85" />
+              <div className="h-2 sm:h-2.5 film-sprockets opacity-85" />
             </div>
           </section>
 
           {/* Exhibition Toolbar & Masonry Wall */}
-          <section aria-label="Artwork gallery" className="pt-5 pb-16 sm:pt-7 sm:pb-24">
+          <section aria-label="Artwork gallery" className="pt-3 pb-16 sm:pt-7 sm:pb-24">
             <div className="mb-5 sm:mb-7 flex flex-wrap items-center justify-between gap-3 font-mono-retro text-[11px] uppercase tracking-[0.08em] text-[#635443]">
               <div className="flex items-center gap-2">
                 <span className="font-medium text-[#221B15]">{activeCategory}</span>
@@ -474,7 +528,7 @@ export default function App() {
                 </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2.5">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
                 <div
                   role="group"
                   aria-label="Exhibition view mode"
@@ -484,7 +538,7 @@ export default function App() {
                     type="button"
                     onClick={() => setViewMode('3d')}
                     aria-pressed={false}
-                    className="min-h-[34px] px-2.5 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] rounded-[2px] transition-colors whitespace-nowrap text-[#635443] hover:text-[#221B15] border border-transparent"
+                    className="min-h-[36px] sm:min-h-[34px] px-2.5 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] rounded-[2px] transition-colors whitespace-nowrap text-[#635443] hover:text-[#221B15] border border-transparent"
                   >
                     <Box className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>3D Stage</span>
@@ -493,20 +547,84 @@ export default function App() {
                     type="button"
                     onClick={() => setViewMode('grid')}
                     aria-pressed={true}
-                    className="min-h-[34px] px-2.5 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] rounded-[2px] transition-colors whitespace-nowrap bg-[#F8F3E6] text-[#221B15] font-medium border border-[#221B15]/20 shadow-[1px_1px_0px_rgba(34,27,21,0.12)]"
+                    className="min-h-[36px] sm:min-h-[34px] px-2.5 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.06em] rounded-[2px] transition-colors whitespace-nowrap bg-[#F8F3E6] text-[#221B15] font-medium border border-[#221B15]/20 shadow-[1px_1px_0px_rgba(34,27,21,0.12)]"
                   >
                     <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
                     <span>Grid</span>
                   </button>
                 </div>
 
+                {/* Mobile Column Density Switcher (1 Col Focus / 2 Cols / 3 Cols Contact Sheet) */}
+                <div
+                  role="group"
+                  aria-label="Mobile gallery columns"
+                  className="md:hidden inline-flex items-center p-0.5 bg-[#E3D7BE] rounded-[2px] border border-[#221B15]/20"
+                >
+                  <button
+                    type="button"
+                    onClick={() => setMobileColumns(1)}
+                    aria-label="1 column focus view"
+                    aria-pressed={mobileColumns === 1}
+                    className={`min-h-[36px] min-w-[36px] px-2 inline-flex items-center justify-center rounded-[2px] transition-colors ${
+                      mobileColumns === 1
+                        ? 'bg-[#F8F3E6] text-[#221B15] border border-[#221B15]/20 shadow-[1px_1px_0px_rgba(34,27,21,0.12)]'
+                        : 'text-[#635443] border border-transparent'
+                    }`}
+                  >
+                    <Square className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileColumns(2)}
+                    aria-label="2 columns album view"
+                    aria-pressed={mobileColumns === 2}
+                    className={`min-h-[36px] min-w-[36px] px-2 inline-flex items-center justify-center rounded-[2px] transition-colors ${
+                      mobileColumns === 2
+                        ? 'bg-[#F8F3E6] text-[#221B15] border border-[#221B15]/20 shadow-[1px_1px_0px_rgba(34,27,21,0.12)]'
+                        : 'text-[#635443] border border-transparent'
+                    }`}
+                  >
+                    <Columns2 className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setMobileColumns(3)}
+                    aria-label="3 columns compact contact sheet"
+                    aria-pressed={mobileColumns === 3}
+                    className={`min-h-[36px] min-w-[36px] px-2 inline-flex items-center justify-center rounded-[2px] transition-colors ${
+                      mobileColumns === 3
+                        ? 'bg-[#F8F3E6] text-[#221B15] border border-[#221B15]/20 shadow-[1px_1px_0px_rgba(34,27,21,0.12)]'
+                        : 'text-[#635443] border border-transparent'
+                    }`}
+                  >
+                    <Columns3 className="w-3.5 h-3.5" aria-hidden="true" />
+                  </button>
+                </div>
+
+                {filteredArtworks.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={handleShuffleOpen}
+                    aria-label="Open a random artwork"
+                    className="min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3 inline-flex items-center gap-1.5 text-[11px] uppercase tracking-[0.08em] text-[#F8F3E6] bg-[#B84A27] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27]"
+                  >
+                    <Shuffle className="w-3.5 h-3.5" aria-hidden="true" />
+                    <span>Shuffle</span>
+                  </button>
+                )}
+
                 <button
                   type="button"
                   onClick={() => setShowCaptions((v) => !v)}
                   aria-pressed={showCaptions}
-                  className="min-h-[40px] px-3.5 text-[11px] uppercase tracking-[0.08em] text-[#221B15] hover:text-[#B84A27] border border-[#221B15]/25 hover:border-[#221B15]/60 bg-[#F8F3E6] shadow-[2px_2px_0px_rgba(34,27,21,0.1)] rounded-[2px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27]"
+                  className="min-h-[38px] sm:min-h-[40px] px-2.5 sm:px-3.5 text-[11px] uppercase tracking-[0.08em] text-[#221B15] hover:text-[#B84A27] border border-[#221B15]/25 hover:border-[#221B15]/60 bg-[#F8F3E6] shadow-[2px_2px_0px_rgba(34,27,21,0.1)] rounded-[2px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27]"
                 >
-                  {showCaptions ? 'Hide Labels' : 'Show Labels'}
+                  <span className="sm:hidden">
+                    {showCaptions ? 'Labels On' : 'Labels Off'}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {showCaptions ? 'Hide Labels' : 'Show Labels'}
+                  </span>
                 </button>
 
                 <div
@@ -556,6 +674,7 @@ export default function App() {
               <MasonryGrid
                 artworks={filteredArtworks}
                 desktopColumns={desktopColumns}
+                mobileColumns={mobileColumns}
                 showCaptions={showCaptions}
                 isLoading={!isGalleryReady}
                 onSelectArtwork={handleSelectArtwork}
@@ -563,6 +682,34 @@ export default function App() {
             </Suspense>
           </section>
         </main>
+      )}
+
+      {showScrollActions && viewMode === 'grid' && (
+        <div
+          aria-label="Quick navigation"
+          className="fixed bottom-4 right-4 z-30 flex items-center gap-1.5"
+        >
+          <button
+            type="button"
+            onClick={() => {
+              setViewMode('3d');
+              window.scrollTo({ top: 0 });
+            }}
+            aria-label="Switch back to 3D Stage"
+            className="min-h-[44px] px-3 inline-flex items-center gap-1.5 bg-[#221B15] text-[#F8F3E6] border border-[#F8F3E6]/25 hover:bg-[#B84A27] rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.22)] font-mono-retro text-[10px] uppercase tracking-[0.08em] transition-colors"
+          >
+            <Box className="w-3.5 h-3.5" aria-hidden="true" />
+            <span>3D Stage</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+            aria-label="Scroll back to top"
+            className="min-h-[44px] min-w-[44px] inline-flex items-center justify-center bg-[#F8F3E6] text-[#221B15] border border-[#221B15]/40 hover:border-[#B84A27] hover:text-[#B84A27] rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.18)] transition-colors"
+          >
+            <ArrowUp className="w-4 h-4" aria-hidden="true" />
+          </button>
+        </div>
       )}
 
       <footer className="bg-[#E3D7BE] border-t-2 border-[#221B15]/20 py-10 px-4 sm:px-8 lg:px-12">

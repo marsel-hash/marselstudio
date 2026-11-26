@@ -10,25 +10,29 @@ import {
 interface MasonryGridProps {
   artworks: Artwork[];
   desktopColumns?: 2 | 3;
+  mobileColumns?: 1 | 2 | 3;
   showCaptions?: boolean;
   isLoading?: boolean;
   onSelectArtwork: (artwork: Artwork) => void;
 }
 
-function useColumnCount(desktopColumns: 2 | 3): number {
+function useColumnCount(
+  desktopColumns: 2 | 3,
+  mobileColumns: 1 | 2 | 3
+): number {
   const [cols, setCols] = useState<number>(() => {
-    if (typeof window === 'undefined') return 2;
-    return window.innerWidth >= 768 ? desktopColumns : 2;
+    if (typeof window === 'undefined') return mobileColumns;
+    return window.innerWidth >= 768 ? desktopColumns : mobileColumns;
   });
 
   useEffect(() => {
     const mediaQuery = window.matchMedia('(min-width: 768px)');
     const updateCols = () =>
-      setCols(mediaQuery.matches ? desktopColumns : 2);
+      setCols(mediaQuery.matches ? desktopColumns : mobileColumns);
     updateCols();
     mediaQuery.addEventListener('change', updateCols);
     return () => mediaQuery.removeEventListener('change', updateCols);
-  }, [desktopColumns]);
+  }, [desktopColumns, mobileColumns]);
 
   return cols;
 }
@@ -39,6 +43,7 @@ interface ArtworkTileProps {
   nextArtworkSrc?: string;
   isAboveFold: boolean;
   showCaptions: boolean;
+  isCompactMobile: boolean;
   onSelect: (artwork: Artwork) => void;
 }
 
@@ -48,6 +53,7 @@ function ArtworkTile({
   nextArtworkSrc,
   isAboveFold,
   showCaptions,
+  isCompactMobile,
   onSelect,
 }: ArtworkTileProps) {
   const [loaded, setLoaded] = useState(() => isImagePreloaded(artwork.src));
@@ -119,24 +125,34 @@ function ArtworkTile({
           ? { animationDelay: `${Math.min(plateNumber - 1, 6) * 35}ms` }
           : undefined
       }
-      className={`${shouldAnimatePlate ? 'animate-gallery-plate ' : ''}${!isAboveFold ? 'artwork-plate-contain ' : ''}group relative block w-full text-left bg-[#F8F3E6] p-3 sm:p-3.5 border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2]`}
+      className={`${shouldAnimatePlate ? 'animate-gallery-plate ' : ''}${!isAboveFold ? 'artwork-plate-contain ' : ''}group relative block w-full text-left bg-[#F8F3E6] ${
+        isCompactMobile ? 'p-1.5 sm:p-3.5' : 'p-3 sm:p-3.5'
+      } border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2]`}
     >
       {/* Vintage Album Corner Mounting Ticks */}
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+        className={`${
+          isCompactMobile ? 'hidden sm:block ' : ''
+        }pointer-events-none absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+        className={`${
+          isCompactMobile ? 'hidden sm:block ' : ''
+        }pointer-events-none absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-1.5 left-1.5 w-2 h-2 border-b border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+        className={`${
+          isCompactMobile ? 'hidden sm:block ' : ''
+        }pointer-events-none absolute bottom-1.5 left-1.5 w-2 h-2 border-b border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
       />
       <span
         aria-hidden="true"
-        className="pointer-events-none absolute bottom-1.5 right-1.5 w-2 h-2 border-b border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200"
+        className={`${
+          isCompactMobile ? 'hidden sm:block ' : ''
+        }pointer-events-none absolute bottom-1.5 right-1.5 w-2 h-2 border-b border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
       />
 
       <figure
@@ -193,19 +209,46 @@ function ArtworkTile({
       </figure>
 
       {showCaptions && (
-        <div className="pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-2.5 border-t border-[#221B15]/10 mt-2.5">
+        <div
+          className={
+            isCompactMobile
+              ? 'pt-1.5 sm:pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-1 sm:gap-2.5 border-t border-[#221B15]/10 mt-1.5 sm:mt-2.5'
+              : 'pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-2.5 border-t border-[#221B15]/10 mt-2.5'
+          }
+        >
           <div className="min-w-0">
-            <p className="font-serif-editorial text-[16px] sm:text-[18px] font-semibold leading-snug text-[#221B15] truncate group-hover:text-[#B84A27] transition-colors duration-200">
+            <p
+              className={`font-serif-editorial ${
+                isCompactMobile
+                  ? 'text-[12px] sm:text-[18px]'
+                  : 'text-[16px] sm:text-[18px]'
+              } font-semibold leading-snug text-[#221B15] truncate group-hover:text-[#B84A27] transition-colors duration-200`}
+            >
               {artwork.title}
             </p>
-            <p className="font-mono-retro text-[11px] text-[#635443] truncate mt-0.5">
+            <p
+              className={`${
+                isCompactMobile ? 'hidden sm:block ' : ''
+              }font-mono-retro text-[11px] text-[#635443] truncate mt-0.5`}
+            >
               {artwork.category}
               <span aria-hidden="true"> · </span>
               <span className="tabular-nums">{artwork.year}</span>
             </p>
           </div>
-          <span className="font-mono-retro text-[11px] uppercase tracking-wider text-[#B84A27] tabular-nums shrink-0">
-            ▸ No. {formattedPlate}
+          <span
+            className={`font-mono-retro ${
+              isCompactMobile ? 'text-[9.5px] sm:text-[11px]' : 'text-[11px]'
+            } uppercase tracking-wider text-[#B84A27] tabular-nums shrink-0`}
+          >
+            {isCompactMobile ? (
+              <>
+                <span className="sm:hidden">{formattedPlate}</span>
+                <span className="hidden sm:inline">▸ No. {formattedPlate}</span>
+              </>
+            ) : (
+              `▸ No. ${formattedPlate}`
+            )}
           </span>
         </div>
       )}
@@ -216,11 +259,22 @@ function ArtworkTile({
 export function MasonryGrid({
   artworks,
   desktopColumns = 3,
+  mobileColumns = 2,
   showCaptions = true,
   isLoading = false,
   onSelectArtwork,
 }: MasonryGridProps) {
-  const columnCount = useColumnCount(desktopColumns);
+  const columnCount = useColumnCount(desktopColumns, mobileColumns);
+  const isCompactMobile = columnCount === 3;
+  const gridColsClass =
+    columnCount === 1
+      ? 'grid-cols-1'
+      : columnCount === 3
+        ? 'grid-cols-3'
+        : 'grid-cols-2';
+  const gridGapClass = isCompactMobile
+    ? 'gap-2 sm:gap-5 lg:gap-7'
+    : 'gap-3.5 sm:gap-5 lg:gap-7';
 
   const { columns, indexById } = useMemo(() => {
     const colArrays: Artwork[][] = Array.from({ length: columnCount }, () => []);
@@ -250,9 +304,7 @@ export function MasonryGrid({
       <div
         aria-busy="true"
         aria-label="Loading artworks"
-        className={`grid gap-3.5 sm:gap-5 lg:gap-7 items-start ${
-          columnCount === 3 ? 'grid-cols-3' : 'grid-cols-2'
-        }`}
+        className={`grid ${gridGapClass} items-start ${gridColsClass}`}
       >
         {Array.from({ length: columnCount }).map((_, idx) => (
           <div
@@ -286,13 +338,9 @@ export function MasonryGrid({
   }
 
   return (
-    <div
-      className={`grid gap-3.5 sm:gap-5 lg:gap-7 items-start ${
-        columnCount === 3 ? 'grid-cols-3' : 'grid-cols-2'
-      }`}
-    >
+    <div className={`grid ${gridGapClass} items-start ${gridColsClass}`}>
       {columns.map((columnItems, colIdx) => (
-        <div key={colIdx} className="flex flex-col gap-3.5 sm:gap-5 lg:gap-7">
+        <div key={colIdx} className={`flex flex-col ${gridGapClass}`}>
           {columnItems.map((artwork) => {
             const globalIndex = indexById.get(artwork.id) ?? 0;
             const nextArtwork =
@@ -306,8 +354,9 @@ export function MasonryGrid({
                 artwork={artwork}
                 plateNumber={globalIndex + 1}
                 nextArtworkSrc={nextArtwork?.src}
-                isAboveFold={globalIndex < 4}
+                isAboveFold={globalIndex < (isCompactMobile ? 6 : 4)}
                 showCaptions={showCaptions}
+                isCompactMobile={isCompactMobile}
                 onSelect={onSelectArtwork}
               />
             );
