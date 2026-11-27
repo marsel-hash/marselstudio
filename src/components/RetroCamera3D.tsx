@@ -109,10 +109,10 @@ export function RetroCamera3D() {
     controls.rotateSpeed = 0.72;
     controls.update();
 
-    const hemiLight = new THREE.HemisphereLight(0xfff5e4, 0x564636, 0.75);
+    const hemiLight = new THREE.HemisphereLight(0xfff5e4, 0x3b3128, 0.95);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff0d6, 2.35);
+    const keyLight = new THREE.DirectionalLight(0xfff0d6, 2.55);
     keyLight.position.set(3.2, 4.6, 3.8);
     if (!isSoftwareGl) {
       keyLight.castShadow = true;
@@ -129,7 +129,7 @@ export function RetroCamera3D() {
     }
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0xf6d5b0, 1.35);
+    const rimLight = new THREE.DirectionalLight(0xf6d5b0, 1.85);
     rimLight.position.set(-3.4, 2.8, -3.2);
     scene.add(rimLight);
 
@@ -143,9 +143,10 @@ export function RetroCamera3D() {
       new THREE.PlaneGeometry(3.4, 2.5),
       new THREE.MeshBasicMaterial({
         map: shadowMapTex,
+        color: 0x050403,
         transparent: true,
         depthWrite: false,
-        opacity: 0.85,
+        opacity: 0.72,
       })
     );
     shadowPlane.rotation.x = -Math.PI / 2;
@@ -348,7 +349,7 @@ export function RetroCamera3D() {
       <button
         type="button"
         onClick={() => shutterTriggerRef.current?.()}
-        className="mt-1 font-mono-retro text-[10px] uppercase tracking-[0.14em] text-[#635443] hover:text-[#B84A27] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px] px-2 py-1"
+        className="mt-1 font-mono-retro text-[10px] uppercase tracking-[0.14em] text-[#A2998C] hover:text-[#D8572A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D8572A] rounded-[2px] px-2 py-1"
       >
         Drag to orbit · Click shutter
       </button>

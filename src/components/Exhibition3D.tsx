@@ -67,9 +67,9 @@ const _dummyScale = new THREE.Vector3(1, 1, 1);
 const _upAxis = new THREE.Vector3(0, 1, 0);
 const _dirVec = new THREE.Vector3();
 
-const _colorFocused = new THREE.Color(0xb84a27);
-const _colorIdle = new THREE.Color(0x9f7e48);
-const _emissiveFocused = new THREE.Color(0x3b1206);
+const _colorFocused = new THREE.Color(0xd8572a);
+const _colorIdle = new THREE.Color(0xc6a15b);
+const _emissiveFocused = new THREE.Color(0x70230a);
 const _emissiveIdle = new THREE.Color(0x000000);
 
 function createSharedPlaceholderTexture(
@@ -81,12 +81,12 @@ function createSharedPlaceholderTexture(
   const ctx = canvas.getContext('2d');
   if (ctx) {
     const grad = ctx.createLinearGradient(0, 0, 256, 256);
-    grad.addColorStop(0, '#E5DCC8');
-    grad.addColorStop(1, '#CFC1A6');
+    grad.addColorStop(0, '#25211C');
+    grad.addColorStop(1, '#161411');
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 256, 256);
 
-    ctx.strokeStyle = 'rgba(34, 27, 21, 0.16)';
+    ctx.strokeStyle = 'rgba(244, 239, 230, 0.14)';
     ctx.lineWidth = 4;
     ctx.strokeRect(14, 14, 228, 228);
   }
@@ -148,30 +148,30 @@ function createPlaqueTexture(
   canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    ctx.fillStyle = '#f8f3e6';
+    ctx.fillStyle = '#161411';
     ctx.fillRect(0, 0, w, h);
 
-    ctx.strokeStyle = 'rgba(34, 27, 21, 0.28)';
-    ctx.lineWidth = 6 * s;
+    ctx.strokeStyle = 'rgba(198, 161, 91, 0.42)';
+    ctx.lineWidth = 4 * s;
     ctx.strokeRect(8 * s, 8 * s, 1008 * s, 240 * s);
 
-    ctx.fillStyle = '#b84a27';
-    ctx.font = `600 ${Math.round(40 * s)}px "IBM Plex Mono", monospace`;
+    ctx.fillStyle = '#D8572A';
+    ctx.font = `600 ${Math.round(38 * s)}px "IBM Plex Mono", monospace`;
     ctx.fillText(
       `NO. ${String(plateNumber).padStart(2, '0')} · ${artwork.category.toUpperCase()} · ${artwork.year}`,
       48 * s,
-      90 * s
+      88 * s
     );
 
-    ctx.strokeStyle = 'rgba(34, 27, 21, 0.14)';
+    ctx.strokeStyle = 'rgba(244, 239, 230, 0.14)';
     ctx.lineWidth = Math.max(1, 2 * s);
     ctx.beginPath();
     ctx.moveTo(48 * s, 114 * s);
     ctx.lineTo(976 * s, 114 * s);
     ctx.stroke();
 
-    ctx.fillStyle = '#221b15';
-    ctx.font = `600 ${Math.round(60 * s)}px Georgia, serif`;
+    ctx.fillStyle = '#F4EFE6';
+    ctx.font = `600 ${Math.round(58 * s)}px Georgia, serif`;
     const titleText =
       artwork.title.length > 26
         ? `${artwork.title.slice(0, 25)}…`
@@ -408,15 +408,15 @@ export function Exhibition3D({
     container.appendChild(renderer.domElement);
 
     const scene = new THREE.Scene();
-    const bgHex = 0xeae0ca;
+    const bgHex = 0x100e0c;
     scene.background = new THREE.Color(bgHex);
-    scene.fog = new THREE.FogExp2(bgHex, 0.036);
+    scene.fog = new THREE.FogExp2(bgHex, 0.022);
 
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
     const roomEnv = new RoomEnvironment();
     const envTarget = pmremGenerator.fromScene(roomEnv, 0.04);
     scene.environment = envTarget.texture;
-    scene.environmentIntensity = 0.44;
+    scene.environmentIntensity = 0.56;
     roomEnv.dispose();
     pmremGenerator.dispose();
 
@@ -453,11 +453,11 @@ export function Exhibition3D({
       return { focusDist, camOffsetY, angleLead, axisBlend, viewportAspect: aspect };
     };
 
-    // 3-Point Warm Gallery Studio Lighting (rotates dynamically with camera azimuth)
-    const hemiLight = new THREE.HemisphereLight(0xfff8eb, 0x6f5b46, 0.52);
+    // 3-Point Museum Spotlight Studio Lighting (rotates dynamically with camera azimuth)
+    const hemiLight = new THREE.HemisphereLight(0xfff4df, 0x26201a, 0.48);
     scene.add(hemiLight);
 
-    const keyLight = new THREE.DirectionalLight(0xfff1d6, 0.82);
+    const keyLight = new THREE.DirectionalLight(0xfff0d4, 1.05);
     keyLight.position.set(4.5, 6.8, 7.5);
     scene.add(keyLight.target);
     if (enableDynamicShadows) {
@@ -474,7 +474,7 @@ export function Exhibition3D({
     }
     scene.add(keyLight);
 
-    const rimLight = new THREE.DirectionalLight(0xebd8bc, 0.4);
+    const rimLight = new THREE.DirectionalLight(0xe8cfa4, 0.72);
     rimLight.position.set(-5.0, 4.0, -5.5);
     scene.add(rimLight);
 
@@ -485,40 +485,40 @@ export function Exhibition3D({
     const textureLoader = new THREE.TextureLoader();
     textureLoader.setCrossOrigin('anonymous');
 
-    // Architectural Materials
+    // Architectural Obsidian & Champagne Brass Materials
     const darkWalnutMat = new THREE.MeshStandardMaterial({
-      color: 0x261d16,
-      roughness: 0.46,
-      metalness: 0.12,
+      color: 0x171412,
+      roughness: 0.42,
+      metalness: 0.22,
     });
     const matBoardMat = new THREE.MeshStandardMaterial({
-      color: 0xf9f5eb,
+      color: 0xf6f2e8,
       roughness: 0.88,
       metalness: 0.02,
     });
     const travertineMat = new THREE.MeshStandardMaterial({
-      color: 0xd8cab0,
-      roughness: 0.84,
-      metalness: 0.04,
+      color: 0x282420,
+      roughness: 0.72,
+      metalness: 0.14,
     });
     const brassSpineMat = new THREE.MeshStandardMaterial({
-      color: 0x9f7e48,
-      roughness: 0.32,
-      metalness: 0.78,
+      color: 0xc6a15b,
+      roughness: 0.28,
+      metalness: 0.84,
     });
     const bronzeArmMat = new THREE.MeshStandardMaterial({
-      color: 0x1e1813,
-      roughness: 0.36,
-      metalness: 0.72,
+      color: 0x3a322a,
+      roughness: 0.34,
+      metalness: 0.76,
     });
 
-    // Rotunda Limestone Floor & Concentric Brass Inlay Rings
+    // Honed Obsidian Basalt Floor & Concentric Brass Inlay Rings
     const floor = new THREE.Mesh(
       new THREE.CircleGeometry(30, 64),
       new THREE.MeshStandardMaterial({
-        color: 0xe3d7be,
-        roughness: 0.92,
-        metalness: 0.02,
+        color: 0x161412,
+        roughness: 0.84,
+        metalness: 0.08,
       })
     );
     floor.rotation.x = -Math.PI / 2;
@@ -527,17 +527,17 @@ export function Exhibition3D({
     scene.add(floor);
 
     const brassInlayMat = new THREE.MeshStandardMaterial({
-      color: 0x9f7e48,
-      roughness: 0.36,
-      metalness: 0.78,
+      color: 0xc6a15b,
+      roughness: 0.32,
+      metalness: 0.84,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
     });
 
-    [1.82, HELIX_RADIUS, 5.4].forEach((radius) => {
+    [1.82, HELIX_RADIUS, 5.4, 7.2, 10.4].forEach((radius) => {
       const ring = new THREE.Mesh(
-        new THREE.RingGeometry(radius - 0.03, radius + 0.03, 72),
+        new THREE.RingGeometry(radius - 0.022, radius + 0.022, 72),
         brassInlayMat
       );
       ring.rotation.x = -Math.PI / 2;
@@ -545,13 +545,37 @@ export function Exhibition3D({
       scene.add(ring);
     });
 
+    // Radial Brass Floor Compass Spokes (12 instanced inlays)
+    const spokeCount = 12;
+    const spokeLen = 8.9;
+    const spokeGeo = new THREE.PlaneGeometry(0.028, spokeLen);
+    spokeGeo.rotateX(-Math.PI / 2);
+    const spokeInstanced = new THREE.InstancedMesh(
+      spokeGeo,
+      brassInlayMat,
+      spokeCount
+    );
+    const spokeMidR = 1.52 + spokeLen / 2;
+    for (let s = 0; s < spokeCount; s++) {
+      const ang = (s / spokeCount) * Math.PI * 2;
+      _dummyPos.set(spokeMidR * Math.sin(ang), 0.004, spokeMidR * Math.cos(ang));
+      _dummyQuat.setFromAxisAngle(_upAxis, ang);
+      _dummyScale.set(1, 1, 1);
+      _dummyMat4.compose(_dummyPos, _dummyQuat, _dummyScale);
+      spokeInstanced.setMatrixAt(s, _dummyMat4);
+    }
+    spokeInstanced.instanceMatrix.needsUpdate = true;
+    spokeInstanced.computeBoundingSphere();
+    scene.add(spokeInstanced);
+
     const rotundaCenterPool = new THREE.Mesh(
-      new THREE.PlaneGeometry(4.4, 4.4),
+      new THREE.PlaneGeometry(5.8, 5.8),
       new THREE.MeshBasicMaterial({
         map: shadowTex,
+        color: 0xc6a15b,
         transparent: true,
         depthWrite: false,
-        opacity: 0.44,
+        opacity: 0.18,
       })
     );
     rotundaCenterPool.rotation.x = -Math.PI / 2;
@@ -560,9 +584,146 @@ export function Exhibition3D({
 
     const depthHiddenObjects: THREE.Object3D[] = [rotundaCenterPool];
 
-    // Central Architectural Atrium Core & Pedestal
+    // Central Architectural Atrium Core, Pedestal & Overhead Light Cove Crown
     const topArtworkY = BASE_FRAME_Y + Math.max(0, artworks.length - 1) * Y_STEP;
     const mastTotalHeight = topArtworkY + 1.35;
+
+    // Warm Architectural Cyclorama Wall & Fluted Rotunda Background (BackSide)
+    const cycloramaCanvas = document.createElement('canvas');
+    cycloramaCanvas.width = 256;
+    cycloramaCanvas.height = 256;
+    const cycCtx = cycloramaCanvas.getContext('2d');
+    if (cycCtx) {
+      const vGrad = cycCtx.createLinearGradient(0, 0, 0, 256);
+      vGrad.addColorStop(0, '#0E0D0B');
+      vGrad.addColorStop(0.26, '#1D1813');
+      vGrad.addColorStop(0.54, '#272018');
+      vGrad.addColorStop(0.84, '#181410');
+      vGrad.addColorStop(1, '#0F0D0B');
+      cycCtx.fillStyle = vGrad;
+      cycCtx.fillRect(0, 0, 256, 256);
+
+      // Subtle architectural vertical wall paneling bands
+      for (let x = 0; x < 256; x += 16) {
+        cycCtx.fillStyle = 'rgba(198, 161, 91, 0.045)';
+        cycCtx.fillRect(x, 0, 1, 256);
+        cycCtx.fillStyle = 'rgba(0, 0, 0, 0.14)';
+        cycCtx.fillRect(x + 1, 0, 2, 256);
+      }
+    }
+    const cycloramaTex = new THREE.CanvasTexture(cycloramaCanvas);
+    cycloramaTex.colorSpace = THREE.SRGBColorSpace;
+    cycloramaTex.wrapS = THREE.RepeatWrapping;
+    cycloramaTex.repeat.set(3, 1);
+
+    const rotundaWallHeight = mastTotalHeight + 10;
+    const cycloramaWall = new THREE.Mesh(
+      new THREE.CylinderGeometry(14.5, 14.5, rotundaWallHeight, 48, 1, true),
+      new THREE.MeshBasicMaterial({
+        map: cycloramaTex,
+        side: THREE.BackSide,
+        fog: false,
+      })
+    );
+    cycloramaWall.position.y = rotundaWallHeight / 2 - 1;
+    scene.add(cycloramaWall);
+
+    // 24-Pillar Outer Museum Colonnade + Brass Capitals (2 Instanced Draw Calls)
+    const pillarCount = 24;
+    const pillarRadius = 10.6;
+    const pillarHeight = mastTotalHeight + 5.0;
+    const pillarGeo = new THREE.CylinderGeometry(0.16, 0.2, pillarHeight, 10);
+    const pillarMat = new THREE.MeshStandardMaterial({
+      color: 0x221e19,
+      roughness: 0.78,
+      metalness: 0.16,
+    });
+    const pillarInstanced = new THREE.InstancedMesh(
+      pillarGeo,
+      pillarMat,
+      pillarCount
+    );
+    const capGeo = new THREE.CylinderGeometry(0.24, 0.24, 0.14, 12);
+    const capInstanced = new THREE.InstancedMesh(
+      capGeo,
+      brassSpineMat,
+      pillarCount * 2
+    );
+
+    for (let p = 0; p < pillarCount; p++) {
+      const ang = (p / pillarCount) * Math.PI * 2;
+      const px = pillarRadius * Math.sin(ang);
+      const pz = pillarRadius * Math.cos(ang);
+
+      _dummyPos.set(px, pillarHeight / 2, pz);
+      _dummyQuat.identity();
+      _dummyScale.set(1, 1, 1);
+      _dummyMat4.compose(_dummyPos, _dummyQuat, _dummyScale);
+      pillarInstanced.setMatrixAt(p, _dummyMat4);
+
+      _dummyPos.set(px, 0.08, pz);
+      _dummyMat4.compose(_dummyPos, _dummyQuat, _dummyScale);
+      capInstanced.setMatrixAt(p * 2, _dummyMat4);
+
+      _dummyPos.set(px, 3.6, pz);
+      _dummyMat4.compose(_dummyPos, _dummyQuat, _dummyScale);
+      capInstanced.setMatrixAt(p * 2 + 1, _dummyMat4);
+    }
+    pillarInstanced.instanceMatrix.needsUpdate = true;
+    pillarInstanced.computeBoundingSphere();
+    capInstanced.instanceMatrix.needsUpdate = true;
+    capInstanced.computeBoundingSphere();
+    scene.add(pillarInstanced);
+    scene.add(capInstanced);
+
+    // Horizontal Mezzanine Gallery Cornice Rings around the Outer Hall
+    [3.6, 7.6, mastTotalHeight + 1.8].forEach((ringY) => {
+      const corniceRing = new THREE.Mesh(
+        new THREE.TorusGeometry(pillarRadius, 0.04, 8, 72),
+        brassSpineMat
+      );
+      corniceRing.rotation.x = Math.PI / 2;
+      corniceRing.position.y = ringY;
+      scene.add(corniceRing);
+    });
+
+    // Subtle Atmospheric Golden Light Motes inside the Atrium
+    const moteCanvas = document.createElement('canvas');
+    moteCanvas.width = 32;
+    moteCanvas.height = 32;
+    const moteCtx = moteCanvas.getContext('2d');
+    if (moteCtx) {
+      const rad = moteCtx.createRadialGradient(16, 16, 0, 16, 16, 16);
+      rad.addColorStop(0, 'rgba(246, 224, 178, 0.95)');
+      rad.addColorStop(0.45, 'rgba(198, 161, 91, 0.42)');
+      rad.addColorStop(1, 'rgba(198, 161, 91, 0)');
+      moteCtx.fillStyle = rad;
+      moteCtx.fillRect(0, 0, 32, 32);
+    }
+    const moteTex = new THREE.CanvasTexture(moteCanvas);
+    const moteCount = isMobilePerf ? 70 : 140;
+    const motePositions = new Float32Array(moteCount * 3);
+    for (let m = 0; m < moteCount; m++) {
+      const mAng = (m * 2.39996) % (Math.PI * 2);
+      const mRad = 2.0 + ((m * 37) % 75) * 0.1;
+      const mY = 0.7 + ((m * 19) % 100) * ((mastTotalHeight + 1.5) / 100);
+      motePositions[m * 3] = Math.cos(mAng) * mRad;
+      motePositions[m * 3 + 1] = mY;
+      motePositions[m * 3 + 2] = Math.sin(mAng) * mRad;
+    }
+    const moteGeo = new THREE.BufferGeometry();
+    moteGeo.setAttribute('position', new THREE.BufferAttribute(motePositions, 3));
+    const moteMat = new THREE.PointsMaterial({
+      map: moteTex,
+      size: 0.11,
+      transparent: true,
+      opacity: 0.42,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+    });
+    const dustMotes = new THREE.Points(moteGeo, moteMat);
+    scene.add(dustMotes);
+    depthHiddenObjects.push(dustMotes);
 
     const pedestalLower = new THREE.Mesh(
       new THREE.CylinderGeometry(1.48, 1.56, 0.16, 48),
@@ -595,6 +756,20 @@ export function Exhibition3D({
     );
     mastCapital.position.y = 0.16 + mastTotalHeight + 0.07;
     scene.add(mastCapital);
+
+    const haloCrown = new THREE.Mesh(
+      new THREE.TorusGeometry(2.35, 0.028, 12, 72),
+      new THREE.MeshStandardMaterial({
+        color: 0xc6a15b,
+        emissive: 0x704c18,
+        emissiveIntensity: 0.85,
+        roughness: 0.3,
+        metalness: 0.85,
+      })
+    );
+    haloCrown.rotation.x = Math.PI / 2;
+    haloCrown.position.y = 0.16 + mastTotalHeight + 0.18;
+    scene.add(haloCrown);
 
     // Instanced Brass Collar Rings up the Central Mast
     const collarCount = Math.max(1, Math.floor(mastTotalHeight / 2.6));
@@ -721,9 +896,9 @@ export function Exhibition3D({
 
     const sharedPlaceholderTex = createSharedPlaceholderTexture(maxAnisotropy);
     const sharedPlaqueBlankMat = new THREE.MeshStandardMaterial({
-      color: 0xf8f3e6,
+      color: 0x161411,
       roughness: 0.72,
-      metalness: 0.04,
+      metalness: 0.08,
       polygonOffset: true,
       polygonOffsetFactor: -1,
       polygonOffsetUnits: -1,
@@ -734,7 +909,7 @@ export function Exhibition3D({
     const armOffsetZ = SPINE_RADIUS - HELIX_RADIUS; // -0.39 (behind frame)
     const sharedArmGeo = new THREE.BoxGeometry(0.06, 0.08, Math.abs(armOffsetZ) + 0.04);
     const sharedClampGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.14, 12);
-    const sharedAccentRingGeo = new THREE.BoxGeometry(0.14, 0.032, 0.09);
+    const sharedAccentRingGeo = new THREE.BoxGeometry(0.18, 0.032, 0.095);
 
     const maxStageTexDim = isMobilePerf ? 960 : 1600;
     const maxConcurrentLoads = isMobilePerf ? 1 : 3;
@@ -790,10 +965,10 @@ export function Exhibition3D({
       group.add(bracketArm);
 
       const accentMat = new THREE.MeshStandardMaterial({
-        color: index === 0 ? 0xb84a27 : 0x9f7e48,
-        emissive: index === 0 ? 0x3b1206 : 0x000000,
-        roughness: 0.34,
-        metalness: 0.58,
+        color: index === 0 ? 0xd8572a : 0xc6a15b,
+        emissive: index === 0 ? 0x70230a : 0x000000,
+        roughness: 0.3,
+        metalness: 0.65,
       });
 
       const accentCap = new THREE.Mesh(sharedAccentRingGeo, accentMat);
@@ -1618,6 +1793,8 @@ export function Exhibition3D({
       outputPass?.dispose();
       composer?.dispose();
       disposeObject3D(scene);
+      cycloramaTex.dispose();
+      moteTex.dispose();
       sharedPlaceholderTex.dispose();
       sharedPlaqueBlankMat.dispose();
       sharedPlaqueBackGeo.dispose();
@@ -1659,12 +1836,12 @@ export function Exhibition3D({
 
   if (isLoading) {
     return (
-      <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#EAE0CA] border-b border-[#221B15]/20 flex items-center justify-center px-6">
-        <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] px-6 py-4 shadow-[4px_4px_0px_rgba(34,27,21,0.1)] text-center">
-          <p className="font-mono-retro text-[11px] uppercase tracking-[0.14em] text-[#B84A27]">
+      <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#0E0D0B] border-b border-[#F4EFE6]/10 flex items-center justify-center px-6">
+        <div className="bg-[#161411] border border-[#F4EFE6]/16 rounded-[2px] px-6 py-4 text-center">
+          <p className="font-mono-retro text-[11px] uppercase tracking-[0.16em] text-[#D8572A]">
             3D Helical Rotunda
           </p>
-          <p className="mt-1 font-serif-editorial text-lg text-[#221B15]">
+          <p className="mt-1 font-serif-editorial text-lg text-[#F4EFE6]">
             Loading curation…
           </p>
         </div>
@@ -1674,15 +1851,15 @@ export function Exhibition3D({
 
   if (artworks.length === 0) {
     return (
-      <div className="w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
-        <div className="py-12 px-8 text-center bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.1)]">
-          <p className="font-serif-editorial text-2xl text-[#221B15]">
+      <div className="w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#0E0D0B] border-b border-[#F4EFE6]/10 px-6">
+        <div className="py-12 px-8 text-center bg-[#161411] border border-[#F4EFE6]/16 rounded-[2px]">
+          <p className="font-serif-editorial text-2xl text-[#F4EFE6]">
             No artworks in this category yet.
           </p>
           <button
             type="button"
             onClick={onExit3D}
-            className="mt-4 min-h-[44px] px-4 font-mono-retro text-[11px] uppercase tracking-[0.08em] bg-[#221B15] text-[#F8F3E6] hover:bg-[#B84A27] rounded-[2px] transition-colors"
+            className="mt-4 min-h-[44px] px-4 font-mono-retro text-[11px] uppercase tracking-[0.08em] bg-[#D8572A] text-[#F4EFE6] hover:bg-[#c0481e] rounded-[2px] transition-colors"
           >
             Switch to Grid View
           </button>
@@ -1693,15 +1870,15 @@ export function Exhibition3D({
 
   if (webglUnsupported) {
     return (
-      <div className="w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#EAE0CA] border-b border-[#221B15]/20 px-6">
-        <div className="p-8 text-center bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.12)] max-w-md">
-          <p className="font-serif-editorial text-xl text-[#221B15]">
+      <div className="w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] flex items-center justify-center bg-[#0E0D0B] border-b border-[#F4EFE6]/10 px-6">
+        <div className="p-8 text-center bg-[#161411] border border-[#F4EFE6]/16 rounded-[2px] max-w-md">
+          <p className="font-serif-editorial text-xl text-[#F4EFE6]">
             3D Exhibition requires WebGL support in your browser.
           </p>
           <button
             type="button"
             onClick={onExit3D}
-            className="mt-4 min-h-[44px] px-4 py-2 font-mono-retro text-xs uppercase tracking-wider bg-[#221B15] text-[#F8F3E6] hover:bg-[#B84A27] rounded-[2px] transition-colors"
+            className="mt-4 min-h-[44px] px-4 py-2 font-mono-retro text-xs uppercase tracking-wider bg-[#D8572A] text-[#F4EFE6] hover:bg-[#c0481e] rounded-[2px] transition-colors"
           >
             Open Grid View
           </button>
@@ -1748,7 +1925,7 @@ export function Exhibition3D({
       : 'Drag or scroll to spiral · Tap any frame';
 
   return (
-    <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#EAE0CA] border-b border-[#221B15]/20 overflow-hidden select-none">
+    <div className="relative w-full h-[calc(100dvh-8.875rem)] md:h-[calc(100dvh-6.75rem)] min-h-[440px] bg-[#0E0D0B] border-b border-[#F4EFE6]/10 overflow-hidden select-none">
       {/* Isolated WebGL Container */}
       <div
         ref={mountRef}
@@ -1906,31 +2083,42 @@ export function Exhibition3D({
         }}
       />
 
-      {/* Top-Left Compact Exhibition Plaque (No backdrop-blur over WebGL) */}
-      <div className="pointer-events-none absolute top-2.5 left-2.5 sm:top-5 sm:left-6 z-10 max-w-[min(440px,calc(100%-1.25rem))] bg-[#F8F3E6]/95 border border-[#221B15]/25 px-2.5 py-1.5 sm:px-4 sm:py-2.5 rounded-[2px] shadow-[2px_2px_0px_rgba(34,27,21,0.12)]">
+      {/* Precision 35mm Optical Viewfinder Framing Reticles (Zero Viewport Occlusion) */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-2.5 sm:inset-4 z-[6]"
+      >
+        <span className="absolute top-0 left-0 w-3.5 h-3.5 border-t border-l border-[#F4EFE6]/25" />
+        <span className="absolute top-0 right-0 w-3.5 h-3.5 border-t border-r border-[#F4EFE6]/25" />
+        <span className="absolute bottom-0 left-0 w-3.5 h-3.5 border-b border-l border-[#F4EFE6]/25" />
+        <span className="absolute bottom-0 right-0 w-3.5 h-3.5 border-b border-r border-[#F4EFE6]/25" />
+      </div>
+
+      {/* Top-Left Unboxed Editorial Exhibition Title Lockup */}
+      <div className="pointer-events-none absolute top-4 left-4 sm:top-6 sm:left-7 z-10 max-w-[min(460px,calc(100%-2rem))] pr-4">
         {(aboutKicker || aboutPeriod) && (
-          <p className="hidden sm:block font-mono-retro text-[10px] uppercase tracking-[0.14em] text-[#B84A27] truncate">
+          <p className="hidden sm:block font-mono-retro text-[10px] uppercase tracking-[0.16em] text-[#D8572A] truncate drop-shadow-[0_1px_2px_rgba(0,0,0,0.9)]">
             <span>{aboutKicker}</span>
             {aboutPeriod && (
               <>
-                <span aria-hidden="true" className="text-[#635443]"> · </span>
-                <span className="tabular-nums text-[#635443]">{aboutPeriod}</span>
+                <span aria-hidden="true" className="text-[#F4EFE6]/30"> · </span>
+                <span className="tabular-nums text-[#A2998C]">{aboutPeriod}</span>
               </>
             )}
           </p>
         )}
-        <h1 className="font-serif-editorial text-[15px] sm:text-xl font-semibold leading-tight text-[#221B15] truncate">
+        <h1 className="font-serif-editorial text-[16px] sm:text-[22px] font-semibold leading-tight text-[#F4EFE6] truncate drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">
           {heroTitle}
         </h1>
-        <p className="mt-0.5 font-mono-retro text-[9.5px] sm:text-[10px] uppercase tracking-[0.08em] text-[#635443] truncate">
-          {activeCategory} · {artworks.length} {artworks.length === 1 ? 'Work' : 'Works'}
+        <p className="mt-0.5 font-mono-retro text-[9.5px] sm:text-[10.5px] uppercase tracking-[0.1em] text-[#A2998C] truncate drop-shadow-[0_1px_4px_rgba(0,0,0,0.9)]">
+          {activeCategory} · {artworks.length} {artworks.length === 1 ? 'Plate' : 'Plates'}
           <span className="hidden sm:inline"> · {interactionHint}</span>
         </p>
       </div>
 
-      {/* Collapsible Bottom Thumb-Zone Dock (Zero Viewport Occlusion) */}
+      {/* Collapsible Obsidian Thumb-Zone Console */}
       <div
-        className={`absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-5 z-10 w-[min(760px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
+        className={`absolute left-1/2 -translate-x-1/2 bottom-2.5 sm:bottom-5 z-10 w-[min(780px,95%)] transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] ${
           isDockCollapsed ? 'translate-y-[calc(100%-30px)]' : 'translate-y-0'
         }`}
       >
@@ -1938,7 +2126,7 @@ export function Exhibition3D({
           <button
             type="button"
             onClick={() => setIsDockCollapsed((v) => !v)}
-            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#F8F3E6] border border-b-0 border-[#221B15]/25 rounded-t-[2px] font-mono-retro text-[10px] uppercase tracking-[0.1em] text-[#635443] hover:text-[#B84A27] transition-colors"
+            className="inline-flex items-center gap-1.5 px-3 py-1 bg-[#161411]/95 border border-b-0 border-[#F4EFE6]/16 rounded-t-[2px] font-mono-retro text-[10px] uppercase tracking-[0.12em] text-[#A2998C] hover:text-[#F4EFE6] transition-colors"
           >
             {isDockCollapsed ? (
               <>
@@ -1954,45 +2142,49 @@ export function Exhibition3D({
           </button>
         </div>
 
-        <div className="bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] shadow-[4px_4px_0px_rgba(34,27,21,0.16)] px-2.5 py-2 sm:px-4 sm:py-3 space-y-2">
+        <div className="bg-[#161411]/95 border border-[#F4EFE6]/16 rounded-[2px] shadow-[0_20px_50px_rgba(0,0,0,0.6)] px-2.5 py-2 sm:px-4 sm:py-3 space-y-2">
           {isFilmstripOpen && artworks.length > 1 && (
-            <div
-              ref={filmstripRef}
-              aria-label="35mm contact sheet quick jump"
-              className="flex items-center gap-1.5 overflow-x-auto no-scrollbar snap-x py-1.5 px-1.5 bg-[#221B15] rounded-[2px]"
-            >
-              {artworks.map((artwork, index) => {
-                const isSelected = index === activeIndex;
-                return (
-                  <button
-                    key={artwork.id}
-                    type="button"
-                    data-film-index={index}
-                    onClick={() => {
-                      setIsOverview(false);
-                      goToIndex(index);
-                    }}
-                    aria-label={`Jump to frame ${index + 1}: ${artwork.title}`}
-                    className={`relative shrink-0 snap-center w-14 h-10 overflow-hidden rounded-[1px] border transition-all ${
-                      isSelected
-                        ? 'border-[#B84A27] ring-1 ring-[#B84A27] opacity-100 scale-[1.03]'
-                        : 'border-[#F8F3E6]/20 opacity-65 hover:opacity-100'
-                    }`}
-                  >
-                    <img
-                      src={artwork.src}
-                      alt=""
-                      loading="lazy"
-                      decoding="async"
-                      referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover"
-                    />
-                    <span className="absolute bottom-0 right-0 px-1 bg-[#221B15]/85 font-mono-retro text-[8px] leading-tight text-[#F8F3E6] tabular-nums">
-                      {String(index + 1).padStart(2, '0')}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="bg-[#0B0A08] border border-[#F4EFE6]/12 rounded-[2px] overflow-hidden">
+              <div className="h-1.5 film-sprockets opacity-85" />
+              <div
+                ref={filmstripRef}
+                aria-label="35mm contact sheet quick jump"
+                className="flex items-center gap-1.5 overflow-x-auto no-scrollbar snap-x py-1.5 px-1.5"
+              >
+                {artworks.map((artwork, index) => {
+                  const isSelected = index === activeIndex;
+                  return (
+                    <button
+                      key={artwork.id}
+                      type="button"
+                      data-film-index={index}
+                      onClick={() => {
+                        setIsOverview(false);
+                        goToIndex(index);
+                      }}
+                      aria-label={`Jump to frame ${index + 1}: ${artwork.title}`}
+                      className={`relative shrink-0 snap-center w-14 h-10 overflow-hidden rounded-[1px] border transition-all ${
+                        isSelected
+                          ? 'border-[#D8572A] ring-1 ring-[#D8572A] opacity-100 scale-[1.03]'
+                          : 'border-[#F4EFE6]/18 opacity-60 hover:opacity-100'
+                      }`}
+                    >
+                      <img
+                        src={artwork.src}
+                        alt=""
+                        loading="lazy"
+                        decoding="async"
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover"
+                      />
+                      <span className="absolute bottom-0 right-0 px-1 bg-[#0D0C0A]/90 font-mono-retro text-[8px] leading-tight text-[#F4EFE6] tabular-nums">
+                        {String(index + 1).padStart(2, '0')}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="h-1.5 film-sprockets opacity-85" />
             </div>
           )}
 
@@ -2003,7 +2195,7 @@ export function Exhibition3D({
                 onClick={handlePrev}
                 disabled={artworks.length <= 1}
                 aria-label="Previous artwork"
-                className="min-h-[44px] min-w-[38px] sm:min-w-[42px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+                className="min-h-[44px] min-w-[38px] sm:min-w-[42px] inline-flex items-center justify-center border border-[#F4EFE6]/16 bg-[#0D0C0A] text-[#F4EFE6] hover:border-[#D8572A] hover:text-[#D8572A] disabled:opacity-40 rounded-[2px] transition-colors"
               >
                 <ChevronLeft className="w-4 h-4" aria-hidden="true" />
               </button>
@@ -2012,18 +2204,18 @@ export function Exhibition3D({
                 onClick={handleNext}
                 disabled={artworks.length <= 1}
                 aria-label="Next artwork"
-                className="min-h-[44px] min-w-[38px] sm:min-w-[42px] inline-flex items-center justify-center border border-[#221B15]/20 bg-[#EFE6D2]/80 hover:border-[#221B15]/50 hover:text-[#B84A27] disabled:opacity-40 rounded-[2px] transition-colors"
+                className="min-h-[44px] min-w-[38px] sm:min-w-[42px] inline-flex items-center justify-center border border-[#F4EFE6]/16 bg-[#0D0C0A] text-[#F4EFE6] hover:border-[#D8572A] hover:text-[#D8572A] disabled:opacity-40 rounded-[2px] transition-colors"
               >
                 <ChevronRight className="w-4 h-4" aria-hidden="true" />
               </button>
             </div>
 
             <div className="min-w-0 flex-1 px-1 text-left">
-              <p className="font-mono-retro text-[10px] uppercase tracking-[0.12em] text-[#B84A27] tabular-nums truncate">
+              <p className="font-mono-retro text-[10px] uppercase tracking-[0.12em] text-[#D8572A] tabular-nums truncate">
                 {String(activeIndex + 1).padStart(2, '0')} /{' '}
                 {String(artworks.length).padStart(2, '0')} · {currentArtwork?.category}
               </p>
-              <p className="font-serif-editorial text-sm sm:text-base font-semibold text-[#221B15] truncate">
+              <p className="font-serif-editorial text-sm sm:text-base font-semibold text-[#F4EFE6] truncate">
                 {currentArtwork?.title}
               </p>
             </div>
@@ -2036,8 +2228,8 @@ export function Exhibition3D({
                 aria-label={isOverview ? 'Zoom into artwork' : 'Open Atrium spiral overview'}
                 className={`min-h-[44px] min-w-[42px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] border rounded-[2px] transition-colors whitespace-nowrap ${
                   isOverview
-                    ? 'bg-[#221B15] text-[#F8F3E6] border-[#221B15]'
-                    : 'bg-[#EFE6D2] text-[#221B15] border-[#221B15]/25 hover:bg-[#E3D7BE]'
+                    ? 'bg-[#C6A15B] text-[#0D0C0A] border-[#C6A15B] font-medium'
+                    : 'bg-[#0D0C0A] text-[#F4EFE6] border-[#F4EFE6]/16 hover:border-[#C6A15B]'
                 }`}
               >
                 <Compass className="w-3.5 h-3.5" aria-hidden="true" />
@@ -2053,8 +2245,8 @@ export function Exhibition3D({
                     aria-label={isFilmstripOpen ? 'Close filmstrip roll' : 'Open filmstrip roll'}
                     className={`min-h-[44px] min-w-[42px] sm:px-2.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] border rounded-[2px] transition-colors whitespace-nowrap ${
                       isFilmstripOpen
-                        ? 'bg-[#221B15] text-[#F8F3E6] border-[#221B15]'
-                        : 'bg-[#EFE6D2] text-[#221B15] border-[#221B15]/25 hover:bg-[#E3D7BE]'
+                        ? 'bg-[#F4EFE6] text-[#0D0C0A] border-[#F4EFE6] font-medium'
+                        : 'bg-[#0D0C0A] text-[#F4EFE6] border-[#F4EFE6]/16 hover:border-[#F4EFE6]/40'
                     }`}
                   >
                     <Film className="w-3.5 h-3.5" aria-hidden="true" />
@@ -2065,7 +2257,7 @@ export function Exhibition3D({
                     type="button"
                     onClick={handleShuffle}
                     aria-label="Fly to random artwork"
-                    className="hidden sm:inline-flex min-h-[44px] min-w-[42px] items-center justify-center border border-[#221B15]/25 bg-[#EFE6D2] text-[#221B15] hover:bg-[#E3D7BE] hover:text-[#B84A27] rounded-[2px] transition-colors"
+                    className="hidden sm:inline-flex min-h-[44px] min-w-[42px] items-center justify-center border border-[#F4EFE6]/16 bg-[#0D0C0A] text-[#F4EFE6] hover:border-[#D8572A] hover:text-[#D8572A] rounded-[2px] transition-colors"
                   >
                     <Shuffle className="w-3.5 h-3.5" aria-hidden="true" />
                   </button>
@@ -2076,7 +2268,7 @@ export function Exhibition3D({
                 type="button"
                 onClick={() => currentArtwork && onSelectArtwork(currentArtwork)}
                 aria-label="Inspect current artwork"
-                className="min-h-[44px] min-w-[42px] sm:px-3.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15] rounded-[2px] transition-colors whitespace-nowrap"
+                className="min-h-[44px] min-w-[42px] sm:px-3.5 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] bg-[#D8572A] text-[#F4EFE6] hover:bg-[#c0481e] rounded-[2px] transition-colors whitespace-nowrap"
               >
                 <Expand className="w-3.5 h-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">Inspect</span>
@@ -2086,7 +2278,7 @@ export function Exhibition3D({
                 type="button"
                 onClick={onExit3D}
                 aria-label="Switch to Grid View"
-                className="min-h-[44px] min-w-[42px] sm:px-3 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#221B15] bg-[#EFE6D2] hover:bg-[#E3D7BE] border border-[#221B15]/25 rounded-[2px] transition-colors whitespace-nowrap"
+                className="min-h-[44px] min-w-[42px] sm:px-3 inline-flex items-center justify-center gap-1.5 font-mono-retro text-[10px] uppercase tracking-[0.08em] text-[#F4EFE6] bg-[#0D0C0A] hover:border-[#F4EFE6]/45 border border-[#F4EFE6]/16 rounded-[2px] transition-colors whitespace-nowrap"
               >
                 <LayoutGrid className="w-3.5 h-3.5" aria-hidden="true" />
                 <span className="hidden sm:inline">Grid</span>
@@ -2098,7 +2290,7 @@ export function Exhibition3D({
             <>
               {/* Mobile Thumb-Friendly Film Scrubber */}
               <div className="sm:hidden flex items-center gap-2.5 pt-0.5">
-                <span className="font-mono-retro text-[9.5px] tabular-nums text-[#635443]">
+                <span className="font-mono-retro text-[9.5px] tabular-nums text-[#A2998C]">
                   01
                 </span>
                 <input
@@ -2112,9 +2304,9 @@ export function Exhibition3D({
                     setIsOverview(false);
                     goToIndex(Number(e.target.value));
                   }}
-                  className="flex-1 h-2 accent-[#B84A27] cursor-pointer"
+                  className="flex-1 h-2 accent-[#D8572A] cursor-pointer"
                 />
-                <span className="font-mono-retro text-[9.5px] tabular-nums text-[#635443]">
+                <span className="font-mono-retro text-[9.5px] tabular-nums text-[#A2998C]">
                   {String(artworks.length).padStart(2, '0')}
                 </span>
               </div>
@@ -2140,8 +2332,8 @@ export function Exhibition3D({
                       }}
                       className={`h-1.5 flex-1 rounded-[1px] transition-colors ${
                         isSelected
-                          ? 'bg-[#B84A27]'
-                          : 'bg-[#221B15]/15 hover:bg-[#221B15]/35'
+                          ? 'bg-[#D8572A]'
+                          : 'bg-[#F4EFE6]/15 hover:bg-[#F4EFE6]/38'
                       }`}
                     />
                   );

@@ -53,7 +53,7 @@ function LightboxSlide({
     <div className="w-full h-full flex items-center justify-center px-3 sm:px-16 py-2">
       {!shouldMountImage ? (
         <div
-          className="w-64 sm:w-80 max-h-[55dvh] sm:max-h-[68dvh] bg-[#F8F3E6] p-2.5 sm:p-3.5 border border-[#221B15]/20 shadow-[6px_6px_0px_rgba(34,27,21,0.12)] rounded-[2px]"
+          className="w-64 sm:w-80 max-h-[55dvh] sm:max-h-[68dvh] bg-[#F5F0E6] p-2 sm:p-3 border border-[#F4EFE6]/15 shadow-[0_24px_64px_rgba(0,0,0,0.65)] rounded-[1px]"
           style={{
             aspectRatio: `${artwork.widthRatio || 4} / ${artwork.heightRatio || 3}`,
           }}
@@ -66,7 +66,7 @@ function LightboxSlide({
           />
         </div>
       ) : !imgError ? (
-        <div className="p-2 sm:p-3.5 bg-[#F8F3E6] border border-[#221B15]/25 shadow-[6px_6px_0px_rgba(34,27,21,0.16)] rounded-[2px]">
+        <div className="p-2 sm:p-3 bg-[#F5F0E6] border border-[#F4EFE6]/25 shadow-[0_28px_72px_rgba(0,0,0,0.72)] rounded-[1px]">
           <img
             ref={imgRef}
             src={artwork.src}
@@ -80,15 +80,15 @@ function LightboxSlide({
               setIsReady(true);
             }}
             onError={() => setImgError(true)}
-            className={`max-h-[56dvh] sm:max-h-[68dvh] w-auto max-w-full object-contain ring-1 ring-inset ring-[#221B15]/15 transition-opacity duration-200 select-none ${
+            className={`max-h-[56dvh] sm:max-h-[68dvh] w-auto max-w-full object-contain ring-1 ring-inset ring-[#171411]/15 transition-opacity duration-200 select-none ${
               isReady ? 'opacity-100' : 'opacity-95'
             }`}
           />
         </div>
       ) : (
-        <div className="w-72 h-72 flex flex-col items-center justify-center bg-[#E3D7BE] border border-[#221B15]/25 text-[#635443] p-6 text-center rounded-[2px]">
+        <div className="w-72 h-72 flex flex-col items-center justify-center bg-[#161411] border border-[#F4EFE6]/18 text-[#A2998C] p-6 text-center rounded-[2px]">
           <ImageOff className="w-6 h-6 mb-2 opacity-60" aria-hidden="true" />
-          <span className="font-serif-editorial text-lg text-[#221B15]">
+          <span className="font-serif-editorial text-lg text-[#F4EFE6]">
             {artwork.title}
           </span>
         </div>
@@ -300,19 +300,19 @@ export function Lightbox({
       role="dialog"
       aria-modal="true"
       aria-label={`Artwork details: ${artwork.title}`}
-      className="fixed inset-0 z-50 bg-[#EFE6D2] flex flex-col justify-between select-none touch-pan-y"
+      className="fixed inset-0 z-50 bg-[#0A0908] flex flex-col justify-between select-none touch-pan-y"
     >
       {/* Top Bar */}
-      <div className="h-14 px-4 sm:px-8 flex items-center justify-between shrink-0 border-b border-[#221B15]/15">
-        <span className="font-mono-retro text-[12px] text-[#635443] tabular-nums tracking-[0.12em]">
-          FRAME {formattedIndex} / {formattedTotal}
+      <div className="h-14 px-4 sm:px-8 flex items-center justify-between shrink-0 border-b border-[#F4EFE6]/12">
+        <span className="font-mono-retro text-[11.5px] text-[#A2998C] tabular-nums tracking-[0.14em]">
+          PLATE {formattedIndex} / {formattedTotal}
         </span>
 
         <button
           type="button"
           onClick={onClose}
           aria-label="Close full screen view"
-          className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center gap-1.5 px-2.5 font-mono-retro text-[12px] uppercase tracking-[0.08em] text-[#221B15] hover:text-[#B84A27] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
+          className="min-h-[44px] min-w-[44px] -mr-2 flex items-center justify-center gap-1.5 px-2.5 font-mono-retro text-[11.5px] uppercase tracking-[0.1em] text-[#F4EFE6] hover:text-[#D8572A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D8572A] rounded-[2px]"
         >
           <span className="hidden sm:inline">Close</span>
           <X className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
@@ -333,7 +333,7 @@ export function Lightbox({
             type="button"
             onClick={goPrev}
             aria-label="Previous photo"
-            className="hidden sm:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 z-10 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/90 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
+            className="hidden sm:flex absolute left-4 lg:left-8 top-1/2 -translate-y-1/2 z-10 min-h-[48px] min-w-[48px] items-center justify-center text-[#A2998C] hover:text-[#F4EFE6] bg-[#161411]/90 border border-[#F4EFE6]/16 hover:border-[#D8572A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D8572A] rounded-[2px]"
           >
             <ChevronLeft className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
           </button>
@@ -383,7 +383,7 @@ export function Lightbox({
             type="button"
             onClick={goNext}
             aria-label="Next photo"
-            className="hidden sm:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 z-10 min-h-[48px] min-w-[48px] items-center justify-center text-[#635443] hover:text-[#B84A27] bg-[#F8F3E6]/90 border border-[#221B15]/20 hover:border-[#221B15]/50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] rounded-[2px]"
+            className="hidden sm:flex absolute right-4 lg:right-8 top-1/2 -translate-y-1/2 z-10 min-h-[48px] min-w-[48px] items-center justify-center text-[#A2998C] hover:text-[#F4EFE6] bg-[#161411]/90 border border-[#F4EFE6]/16 hover:border-[#D8572A] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D8572A] rounded-[2px]"
           >
             <ChevronRight className="w-5 h-5" strokeWidth={1.6} aria-hidden="true" />
           </button>
@@ -391,42 +391,42 @@ export function Lightbox({
       </div>
 
       {/* Caption & Thumb-Friendly Mobile Controls */}
-      <div className="px-5 sm:px-8 pt-2 pb-5 sm:pb-8 shrink-0">
+      <div className="px-5 sm:px-8 pt-2 pb-5 sm:pb-8 shrink-0 border-t border-[#F4EFE6]/8 bg-[#0D0C0A]">
         <div className="max-w-xl mx-auto text-center">
-          <h2 className="font-serif-editorial text-2xl sm:text-[28px] font-semibold leading-tight text-[#221B15] text-balance">
+          <h2 className="font-serif-editorial text-2xl sm:text-[28px] font-semibold leading-tight text-[#F4EFE6] text-balance">
             {artwork.title}
           </h2>
-          <p className="mt-1.5 font-mono-retro text-[11px] sm:text-[12px] text-[#635443] tracking-wide">
-            <span className="tabular-nums text-[#B84A27]">{artwork.year}</span>
+          <p className="mt-1.5 font-mono-retro text-[11px] sm:text-[12px] text-[#A2998C] tracking-wide">
+            <span className="tabular-nums text-[#D8572A]">{artwork.year}</span>
             <span aria-hidden="true"> · </span>
             <span>{artwork.category}</span>
             <span aria-hidden="true"> · </span>
             <span>{artwork.medium}</span>
           </p>
           {artwork.caption && (
-            <p className="mt-2.5 text-[13px] sm:text-sm leading-relaxed text-[#4D4135]">
+            <p className="mt-2.5 text-[13px] sm:text-sm leading-relaxed text-[#CFC7BA]">
               {artwork.caption}
             </p>
           )}
         </div>
 
         {artworks.length > 1 && (
-          <div className="sm:hidden mt-4 pt-3 border-t border-[#221B15]/15 flex items-center justify-between gap-4">
+          <div className="sm:hidden mt-4 pt-3 border-t border-[#F4EFE6]/12 flex items-center justify-between gap-4">
             <button
               type="button"
               onClick={goPrev}
-              className="min-h-[44px] px-3 -ml-3 flex items-center gap-1.5 font-mono-retro text-[12px] uppercase tracking-wider text-[#221B15] active:text-[#B84A27] transition-colors"
+              className="min-h-[44px] px-3 -ml-3 flex items-center gap-1.5 font-mono-retro text-[12px] uppercase tracking-wider text-[#F4EFE6] active:text-[#D8572A] transition-colors"
             >
               <ChevronLeft className="w-4 h-4" strokeWidth={1.6} aria-hidden="true" />
               <span>Previous</span>
             </button>
 
-            <span className="font-mono-retro text-[11px] text-[#635443]">Swipe</span>
+            <span className="font-mono-retro text-[11px] text-[#A2998C]">Swipe</span>
 
             <button
               type="button"
               onClick={goNext}
-              className="min-h-[44px] px-3 -mr-3 flex items-center gap-1.5 font-mono-retro text-[12px] uppercase tracking-wider text-[#221B15] active:text-[#B84A27] transition-colors"
+              className="min-h-[44px] px-3 -mr-3 flex items-center gap-1.5 font-mono-retro text-[12px] uppercase tracking-wider text-[#F4EFE6] active:text-[#D8572A] transition-colors"
             >
               <span>Next</span>
               <ChevronRight className="w-4 h-4" strokeWidth={1.6} aria-hidden="true" />

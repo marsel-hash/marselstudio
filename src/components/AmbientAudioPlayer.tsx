@@ -272,17 +272,17 @@ export function AmbientAudioPlayer() {
     <div
       role="region"
       aria-label="Background gallery audio player"
-      className="inline-flex items-center gap-3 bg-[#F8F3E6] border border-[#221B15]/25 rounded-[2px] px-2.5 py-1.5 shadow-[2px_2px_0px_rgba(34,27,21,0.1)]"
+      className="inline-flex items-center gap-3 bg-[#161411] border border-[#F4EFE6]/16 rounded-[2px] px-2.5 py-1.5"
     >
       <button
         type="button"
         onClick={() => void togglePlay()}
         aria-pressed={isPlaying}
         aria-label={isPlaying ? 'Pause ambient audio' : 'Play ambient audio'}
-        className={`min-h-[34px] px-3 inline-flex items-center gap-1.5 font-mono-retro text-[10.5px] uppercase tracking-[0.08em] rounded-[2px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] ${
+        className={`min-h-[36px] px-3 inline-flex items-center gap-1.5 font-mono-retro text-[10.5px] uppercase tracking-[0.08em] rounded-[2px] transition-colors whitespace-nowrap focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D8572A] ${
           isPlaying
-            ? 'bg-[#B84A27] text-[#F8F3E6] hover:bg-[#221B15]'
-            : 'bg-[#221B15] text-[#F8F3E6] hover:bg-[#B84A27]'
+            ? 'bg-[#D8572A] text-[#F4EFE6] hover:bg-[#c0481e]'
+            : 'bg-[#26221D] text-[#F4EFE6] hover:bg-[#D8572A]'
         }`}
       >
         {isPlaying ? (
@@ -294,16 +294,16 @@ export function AmbientAudioPlayer() {
       </button>
 
       <div className="flex flex-col leading-tight pr-1">
-        <span className="font-mono-retro text-[10px] uppercase tracking-[0.1em] text-[#221B15] whitespace-nowrap">
+        <span className="font-mono-retro text-[10px] uppercase tracking-[0.1em] text-[#F4EFE6] whitespace-nowrap">
           Ambient Tape
         </span>
-        <span className="font-mono-retro text-[9.5px] uppercase tracking-[0.08em] text-[#635443] whitespace-nowrap">
+        <span className="font-mono-retro text-[9.5px] uppercase tracking-[0.08em] text-[#A2998C] whitespace-nowrap">
           {isPlaying ? 'Playing' : 'Paused'}
         </span>
       </div>
 
-      <div className="hidden sm:flex items-center gap-1.5 pl-2 border-l border-[#221B15]/15">
-        <Volume2 className="w-3.5 h-3.5 text-[#635443]" aria-hidden="true" />
+      <div className="hidden sm:flex items-center gap-1.5 pl-2.5 border-l border-[#F4EFE6]/12">
+        <Volume2 className="w-3.5 h-3.5 text-[#A2998C]" aria-hidden="true" />
         <input
           type="range"
           min={0.05}
@@ -312,7 +312,7 @@ export function AmbientAudioPlayer() {
           value={volume}
           onChange={(e) => handleVolumeChange(Number(e.target.value))}
           aria-label="Ambient audio volume"
-          className="w-16 accent-[#B84A27] cursor-pointer"
+          className="w-16 accent-[#D8572A] cursor-pointer"
         />
       </div>
     </div>

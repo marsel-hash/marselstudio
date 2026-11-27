@@ -5,13 +5,14 @@
     --font-serif: 'Fraunces', Georgia, serif;
     --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
-    --bg-canvas: #EFE6D2;
-    --bg-paper: #F8F3E6;
-    --bg-mat: #E3D7BE;
-    --bg-surface: #E3D7BE;
-    --ink-primary: #221B15;
-    --ink-muted: #635443;
-    --accent-retro: #B84A27;
+    --bg-canvas: #0D0C0A;
+    --bg-paper: #161411;
+    --bg-mat: #1F1C18;
+    --bg-surface: #161411;
+    --ink-primary: #F4EFE6;
+    --ink-muted: #A2998C;
+    --accent-retro: #D8572A;
+    --accent-brass: #C6A15B;
   }
 
   html {
@@ -26,11 +27,15 @@
   body {
     background-color: var(--bg-canvas);
     background-image:
-      radial-gradient(ellipse at top center, rgba(248, 243, 230, 0.55) 0%, transparent 65%),
-      radial-gradient(ellipse at bottom center, rgba(196, 178, 145, 0.28) 0%, transparent 70%),
-      radial-gradient(rgba(34, 27, 21, 0.045) 0.75px, transparent 0.75px);
-    background-repeat: no-repeat, no-repeat, repeat;
-    background-size: 100% 100%, 100% 100%, 12px 12px;
+      radial-gradient(ellipse 75% 48% at 50% 0%, rgba(198, 161, 91, 0.095) 0%, transparent 62%),
+      radial-gradient(ellipse 55% 45% at 85% 18%, rgba(216, 87, 42, 0.055) 0%, transparent 60%),
+      radial-gradient(ellipse 65% 45% at 15% 88%, rgba(198, 161, 91, 0.055) 0%, transparent 62%),
+      linear-gradient(to right, rgba(198, 161, 91, 0.042) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(198, 161, 91, 0.042) 1px, transparent 1px),
+      linear-gradient(to right, rgba(244, 239, 230, 0.018) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(244, 239, 230, 0.018) 1px, transparent 1px);
+    background-repeat: no-repeat, no-repeat, no-repeat, repeat, repeat, repeat, repeat;
+    background-size: 100% 100%, 100% 100%, 100% 100%, 96px 96px, 96px 96px, 24px 24px, 24px 24px;
     color: var(--ink-primary);
     margin: 0;
     min-height: 100dvh;
@@ -38,8 +43,8 @@
   }
 
   ::selection {
-    background-color: #B84A27;
-    color: #F8F3E6;
+    background-color: #D8572A;
+    color: #F4EFE6;
   }
 }
 
@@ -61,8 +66,8 @@
     to right,
     transparent 0px,
     transparent 10px,
-    #EFE6D2 10px,
-    #EFE6D2 19px,
+    #0D0C0A 10px,
+    #0D0C0A 19px,
     transparent 19px,
     transparent 28px
   );

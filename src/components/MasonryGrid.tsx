@@ -152,38 +152,38 @@ function ArtworkTile({
         onFocus={handleWarmIntent}
         onTouchStart={handleWarmIntent}
         aria-label={`View artwork ${artwork.title}, ${artwork.year}`}
-        className={`group relative block w-full text-left bg-[#F8F3E6] ${
-          isCompactMobile ? 'p-1.5 sm:p-3.5' : 'p-3 sm:p-3.5'
-        } border border-[#221B15]/25 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.09)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#221B15]/65 hover:shadow-[5px_5px_0px_rgba(34,27,21,0.16)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#B84A27] focus-visible:ring-offset-2 focus-visible:ring-offset-[#EFE6D2]`}
+        className={`group relative block w-full text-left bg-[#161411] ${
+          isCompactMobile ? 'p-1.5 sm:p-3' : 'p-2.5 sm:p-3.5'
+        } border border-[#F4EFE6]/12 rounded-[2px] shadow-[0_12px_32px_rgba(0,0,0,0.35)] transition-[border-color,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:border-[#D8572A]/65 hover:shadow-[0_18px_42px_rgba(0,0,0,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D8572A] focus-visible:ring-offset-2 focus-visible:ring-offset-[#0D0C0A]`}
       >
-      {/* Vintage Album Corner Mounting Ticks */}
+      {/* Archival Brass Mounting Ticks */}
       <span
         aria-hidden="true"
         className={`${
           isCompactMobile ? 'hidden sm:block ' : ''
-        }pointer-events-none absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
+        }pointer-events-none absolute top-1.5 left-1.5 w-2 h-2 border-t border-l border-[#C6A15B]/35 group-hover:border-[#D8572A] transition-colors duration-200`}
       />
       <span
         aria-hidden="true"
         className={`${
           isCompactMobile ? 'hidden sm:block ' : ''
-        }pointer-events-none absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
+        }pointer-events-none absolute top-1.5 right-1.5 w-2 h-2 border-t border-r border-[#C6A15B]/35 group-hover:border-[#D8572A] transition-colors duration-200`}
       />
       <span
         aria-hidden="true"
         className={`${
           isCompactMobile ? 'hidden sm:block ' : ''
-        }pointer-events-none absolute bottom-1.5 left-1.5 w-2 h-2 border-b border-l border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
+        }pointer-events-none absolute bottom-1.5 left-1.5 w-2 h-2 border-b border-l border-[#C6A15B]/35 group-hover:border-[#D8572A] transition-colors duration-200`}
       />
       <span
         aria-hidden="true"
         className={`${
           isCompactMobile ? 'hidden sm:block ' : ''
-        }pointer-events-none absolute bottom-1.5 right-1.5 w-2 h-2 border-b border-r border-[#221B15]/35 group-hover:border-[#B84A27] transition-colors duration-200`}
+        }pointer-events-none absolute bottom-1.5 right-1.5 w-2 h-2 border-b border-r border-[#C6A15B]/35 group-hover:border-[#D8572A] transition-colors duration-200`}
       />
 
       <figure
-        className="relative w-full m-0 overflow-hidden bg-[#E3D7BE] ring-1 ring-inset ring-[#221B15]/15"
+        className="relative w-full m-0 overflow-hidden bg-[#1D1A16] ring-1 ring-inset ring-[#F4EFE6]/10"
         style={{
           aspectRatio: `${artwork.widthRatio} / ${artwork.heightRatio}`,
           backgroundImage: `linear-gradient(155deg, ${artwork.placeholderFrom} 0%, ${artwork.placeholderTo} 100%)`,
@@ -191,13 +191,13 @@ function ArtworkTile({
       >
         <span
           aria-hidden="true"
-          className={`pointer-events-none absolute inset-0 bg-[#F8F3E6]/15 transition-opacity duration-300 ease-out ${
+          className={`pointer-events-none absolute inset-0 bg-[#161411]/25 transition-opacity duration-300 ease-out ${
             loaded || hasError ? 'opacity-0' : 'opacity-100'
           }`}
         />
 
         {!hasError ? (
-          <div className="w-full h-full md:transition-transform md:duration-700 md:ease-[cubic-bezier(0.16,1,0.3,1)] md:group-hover:scale-[1.022]">
+          <div className="w-full h-full md:transition-transform md:duration-700 md:ease-[cubic-bezier(0.16,1,0.3,1)] md:group-hover:scale-[1.024]">
             <img
               ref={imgRef}
               src={artwork.src}
@@ -215,20 +215,20 @@ function ArtworkTile({
             />
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#E3D7BE] text-[#635443]">
+          <div className="w-full h-full flex flex-col items-center justify-center p-4 text-center bg-[#1D1A16] text-[#A2998C]">
             <ImageOff className="w-5 h-5 mb-2 opacity-60" aria-hidden="true" />
-            <span className="font-serif-editorial text-sm text-[#221B15]">
+            <span className="font-serif-editorial text-sm text-[#F4EFE6]">
               {artwork.title}
             </span>
           </div>
         )}
 
         {!showCaptions && (
-          <figcaption className="hidden md:flex flex-col justify-end p-4 absolute inset-0 bg-gradient-to-t from-[#221B15]/85 via-[#221B15]/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
-            <span className="font-serif-editorial text-lg font-medium leading-snug text-[#F8F3E6]">
+          <figcaption className="hidden md:flex flex-col justify-end p-4 absolute inset-0 bg-gradient-to-t from-[#0D0C0A]/90 via-[#0D0C0A]/35 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
+            <span className="font-serif-editorial text-lg font-medium leading-snug text-[#F4EFE6]">
               {artwork.title}
             </span>
-            <span className="font-mono-retro text-[11px] text-[#E3D7BE] mt-0.5 tabular-nums">
+            <span className="font-mono-retro text-[11px] text-[#CFC7BA] mt-0.5 tabular-nums">
               {artwork.year} · {artwork.category}
             </span>
           </figcaption>
@@ -239,8 +239,8 @@ function ArtworkTile({
         <div
           className={
             isCompactMobile
-              ? 'pt-1.5 sm:pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-1 sm:gap-2.5 border-t border-[#221B15]/10 mt-1.5 sm:mt-2.5'
-              : 'pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-2.5 border-t border-[#221B15]/10 mt-2.5'
+              ? 'pt-1.5 sm:pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-1 sm:gap-2.5 border-t border-[#F4EFE6]/10 mt-1.5 sm:mt-2.5'
+              : 'pt-3 pb-0.5 px-0.5 flex items-baseline justify-between gap-2.5 border-t border-[#F4EFE6]/10 mt-2.5'
           }
         >
           <div className="min-w-0">
@@ -249,14 +249,14 @@ function ArtworkTile({
                 isCompactMobile
                   ? 'text-[12px] sm:text-[18px]'
                   : 'text-[16px] sm:text-[18px]'
-              } font-semibold leading-snug text-[#221B15] truncate group-hover:text-[#B84A27] transition-colors duration-200`}
+              } font-semibold leading-snug text-[#F4EFE6] truncate group-hover:text-[#D8572A] transition-colors duration-200`}
             >
               {artwork.title}
             </p>
             <p
               className={`${
                 isCompactMobile ? 'hidden sm:block ' : ''
-              }font-mono-retro text-[11px] text-[#635443] truncate mt-0.5`}
+              }font-mono-retro text-[11px] text-[#A2998C] truncate mt-0.5`}
             >
               {artwork.category}
               <span aria-hidden="true"> · </span>
@@ -266,7 +266,7 @@ function ArtworkTile({
           <span
             className={`font-mono-retro ${
               isCompactMobile ? 'text-[9.5px] sm:text-[11px]' : 'text-[11px]'
-            } uppercase tracking-wider text-[#B84A27] tabular-nums shrink-0`}
+            } uppercase tracking-wider text-[#D8572A] tabular-nums shrink-0`}
           >
             {isCompactMobile ? (
               <>
@@ -388,16 +388,16 @@ export function MasonryGrid({
         {Array.from({ length: columnCount }).map((_, idx) => (
           <div
             key={idx}
-            className="bg-[#F8F3E6] p-2.5 sm:p-3 border border-[#221B15]/20 rounded-[2px] shadow-[3px_3px_0px_rgba(34,27,21,0.08)]"
+            className="bg-[#161411] p-2.5 sm:p-3 border border-[#F4EFE6]/12 rounded-[2px]"
           >
             <div
-              className="w-full bg-[#E3D7BE] animate-pulse"
+              className="w-full bg-[#1F1C18] animate-pulse"
               style={{ aspectRatio: skeletonRatios[idx % skeletonRatios.length] }}
             />
             {showCaptions && (
-              <div className="pt-3 pb-1 px-0.5 space-y-2 border-t border-[#221B15]/10 mt-2.5">
-                <div className="h-4 w-2/3 bg-[#E3D7BE] rounded-[2px] animate-pulse" />
-                <div className="h-3 w-1/3 bg-[#E3D7BE] rounded-[2px] animate-pulse" />
+              <div className="pt-3 pb-1 px-0.5 space-y-2 border-t border-[#F4EFE6]/10 mt-2.5">
+                <div className="h-4 w-2/3 bg-[#1F1C18] rounded-[2px] animate-pulse" />
+                <div className="h-3 w-1/3 bg-[#1F1C18] rounded-[2px] animate-pulse" />
               </div>
             )}
           </div>
@@ -409,7 +409,7 @@ export function MasonryGrid({
   if (artworks.length === 0) {
     return (
       <div className="py-20 text-center">
-        <p className="font-serif-editorial text-xl text-[#221B15]">
+        <p className="font-serif-editorial text-xl text-[#F4EFE6]">
           No artworks in this category yet.
         </p>
       </div>
