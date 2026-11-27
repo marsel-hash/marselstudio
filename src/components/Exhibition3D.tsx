@@ -137,42 +137,46 @@ function downscaleTextureForStage(
 function createPlaqueTexture(
   artwork: Artwork,
   plateNumber: number,
-  maxAnisotropy: number
+  maxAnisotropy: number,
+  compact: boolean
 ): THREE.CanvasTexture {
+  const w = compact ? 512 : 1024;
+  const h = compact ? 128 : 256;
+  const s = compact ? 0.5 : 1;
   const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 256;
+  canvas.width = w;
+  canvas.height = h;
   const ctx = canvas.getContext('2d');
   if (ctx) {
     ctx.fillStyle = '#f8f3e6';
-    ctx.fillRect(0, 0, 1024, 256);
+    ctx.fillRect(0, 0, w, h);
 
     ctx.strokeStyle = 'rgba(34, 27, 21, 0.28)';
-    ctx.lineWidth = 6;
-    ctx.strokeRect(8, 8, 1008, 240);
+    ctx.lineWidth = 6 * s;
+    ctx.strokeRect(8 * s, 8 * s, 1008 * s, 240 * s);
 
     ctx.fillStyle = '#b84a27';
-    ctx.font = '600 40px "IBM Plex Mono", monospace';
+    ctx.font = `600 ${Math.round(40 * s)}px "IBM Plex Mono", monospace`;
     ctx.fillText(
       `NO. ${String(plateNumber).padStart(2, '0')} · ${artwork.category.toUpperCase()} · ${artwork.year}`,
-      48,
-      90
+      48 * s,
+      90 * s
     );
 
     ctx.strokeStyle = 'rgba(34, 27, 21, 0.14)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = Math.max(1, 2 * s);
     ctx.beginPath();
-    ctx.moveTo(48, 114);
-    ctx.lineTo(976, 114);
+    ctx.moveTo(48 * s, 114 * s);
+    ctx.lineTo(976 * s, 114 * s);
     ctx.stroke();
 
     ctx.fillStyle = '#221b15';
-    ctx.font = '600 60px Georgia, serif';
+    ctx.font = `600 ${Math.round(60 * s)}px Georgia, serif`;
     const titleText =
       artwork.title.length > 26
         ? `${artwork.title.slice(0, 25)}…`
         : artwork.title;
-    ctx.fillText(titleText, 48, 188);
+    ctx.fillText(titleText, 48 * s, 188 * s);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -211,11 +215,12 @@ export function Exhibition3D({
   const isOverviewRef = useRef(false);
   isOverviewRef.current = isOverview;
 
-  const targetOffsetRef = useRef(0);
-  const momentumVelRef = useRef(0);
-  const snapTargetRef = useRef<number | null>(0);
+  const scrollOffsetRef = useRef(0);
+  const scrollVelRef = useRef(0);
+  const goalIndexRef = useRef<number | null>(0);
   const isDraggingRef = useRef(false);
   const introProgressRef = useRef(1);
+  const lastUiSyncRef = useRef(0);
 
   const artworksRef = useRef(artworks);
   artworksRef.current = artworks;
@@ -230,24 +235,34 @@ export function Exhibition3D({
   const handlePointerParallaxRef = useRef<((nx: number, ny: number) => void) | null>(null);
   const handlePointerLeaveRef = useRef<(() => void) | null>(null);
 
+  const syncActiveUi = (nextIdx: number, force = false) => {
+    activeIndexRef.current = nextIdx;
+    const now = performance.now();
+    if (
+      force ||
+      now - lastUiSyncRef.current >= 90 ||
+      Math.abs(scrollVelRef.current) < 0.75
+    ) {
+      lastUiSyncRef.current = now;
+      setActiveIndex(nextIdx);
+    }
+  };
+
   const goToIndex = (index: number) => {
     const count = artworksRef.current.length;
     if (count === 0) return;
     const clamped = Math.max(0, Math.min(count - 1, index));
-    momentumVelRef.current = 0;
-    snapTargetRef.current = clamped;
-    targetOffsetRef.current = clamped;
-    activeIndexRef.current = clamped;
-    setActiveIndex(clamped);
+    goalIndexRef.current = clamped;
+    syncActiveUi(clamped, true);
     requestRenderRef.current?.();
   };
 
   useEffect(() => {
     setActiveIndex(0);
     activeIndexRef.current = 0;
-    targetOffsetRef.current = 0;
-    snapTargetRef.current = 0;
-    momentumVelRef.current = 0;
+    scrollOffsetRef.current = 0;
+    scrollVelRef.current = 0;
+    goalIndexRef.current = 0;
     introProgressRef.current = 1;
     setIsOverview(false);
     isOverviewRef.current = false;
@@ -318,23 +333,22 @@ export function Exhibition3D({
         Math.abs(e.deltaY) >= Math.abs(e.deltaX) ? e.deltaY : e.deltaX;
       const stepDelta = THREE.MathUtils.clamp(rawDelta * 0.0042, -1.6, 1.6);
 
-      snapTargetRef.current = null;
+      goalIndexRef.current = null;
       const nextOffset = THREE.MathUtils.clamp(
-        targetOffsetRef.current + stepDelta,
+        scrollOffsetRef.current + stepDelta,
         0,
         count - 1
       );
-      targetOffsetRef.current = nextOffset;
-      momentumVelRef.current = THREE.MathUtils.clamp(
-        momentumVelRef.current * 0.55 + stepDelta * 9.5,
+      scrollOffsetRef.current = nextOffset;
+      scrollVelRef.current = THREE.MathUtils.clamp(
+        scrollVelRef.current * 0.55 + stepDelta * 9.5,
         -12,
         12
       );
 
       const nearest = Math.max(0, Math.min(count - 1, Math.round(nextOffset)));
       if (nearest !== activeIndexRef.current) {
-        activeIndexRef.current = nearest;
-        setActiveIndex(nearest);
+        syncActiveUi(nearest);
       }
       requestRenderRef.current?.();
     };
@@ -372,7 +386,7 @@ export function Exhibition3D({
     const targetDpr = isSoftwareGl
       ? 1
       : isMobilePerf
-        ? Math.min(rawDpr, area > 340000 ? 1.5 : 1.75)
+        ? Math.min(rawDpr, area > 420000 ? 1.75 : 2)
         : Math.min(rawDpr, 2);
 
     const renderer = new THREE.WebGLRenderer({
@@ -384,10 +398,10 @@ export function Exhibition3D({
     renderer.toneMappingExposure = 1.0;
     renderer.setPixelRatio(targetDpr);
     renderer.setSize(width, height);
-    renderer.shadowMap.enabled = !isSoftwareGl;
-    renderer.shadowMap.type = isMobilePerf
-      ? THREE.PCFShadowMap
-      : THREE.PCFSoftShadowMap;
+    // Single-pass hardware antialiasing on mobile skips extra shadow & post-processing passes
+    const enableDynamicShadows = !isSoftwareGl && !isMobilePerf;
+    renderer.shadowMap.enabled = enableDynamicShadows;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     renderer.domElement.style.display = 'block';
     renderer.domElement.style.width = '100%';
     renderer.domElement.style.height = '100%';
@@ -446,10 +460,9 @@ export function Exhibition3D({
     const keyLight = new THREE.DirectionalLight(0xfff1d6, 0.82);
     keyLight.position.set(4.5, 6.8, 7.5);
     scene.add(keyLight.target);
-    if (!isSoftwareGl) {
+    if (enableDynamicShadows) {
       keyLight.castShadow = true;
-      const shadowRes = isMobilePerf ? 512 : 1024;
-      keyLight.shadow.mapSize.set(shadowRes, shadowRes);
+      keyLight.shadow.mapSize.set(1024, 1024);
       keyLight.shadow.camera.near = 0.5;
       keyLight.shadow.camera.far = 26;
       keyLight.shadow.camera.left = -8;
@@ -723,9 +736,16 @@ export function Exhibition3D({
     const sharedClampGeo = new THREE.CylinderGeometry(0.075, 0.075, 0.14, 12);
     const sharedAccentRingGeo = new THREE.BoxGeometry(0.14, 0.032, 0.09);
 
-    const maxStageTexDim = isMobilePerf ? 1024 : 1600;
-    const maxConcurrentLoads = isMobilePerf ? 2 : 4;
+    const maxStageTexDim = isMobilePerf ? 960 : 1600;
+    const maxConcurrentLoads = isMobilePerf ? 1 : 3;
     let activeTextureLoads = 0;
+
+    interface PendingTextureCommit {
+      index: number;
+      texture: THREE.Texture;
+      commit: () => void;
+    }
+    const pendingTextureCommits: PendingTextureCommit[] = [];
 
     const scheduleNextTextureLoads = () => {
       if (disposed || activeTextureLoads >= maxConcurrentLoads) return;
@@ -766,7 +786,7 @@ export function Exhibition3D({
 
       const bracketArm = new THREE.Mesh(sharedArmGeo, bronzeArmMat);
       bracketArm.position.set(0, 0, armOffsetZ / 2);
-      bracketArm.castShadow = !isSoftwareGl;
+      bracketArm.castShadow = enableDynamicShadows;
       group.add(bracketArm);
 
       const accentMat = new THREE.MeshStandardMaterial({
@@ -785,8 +805,8 @@ export function Exhibition3D({
         new THREE.BoxGeometry(metrics.outerWidth, metrics.outerHeight, 0.08),
         darkWalnutMat
       );
-      outerFrame.castShadow = !isSoftwareGl;
-      outerFrame.receiveShadow = !isSoftwareGl;
+      outerFrame.castShadow = enableDynamicShadows;
+      outerFrame.receiveShadow = enableDynamicShadows;
       outerFrame.layers.enable(1);
       outerFrame.userData.artworkIndex = index;
       group.add(outerFrame);
@@ -831,7 +851,12 @@ export function Exhibition3D({
       const ensurePlaque = () => {
         if (plaqueBuilt || disposed) return;
         plaqueBuilt = true;
-        const plaqueTex = createPlaqueTexture(artwork, index + 1, maxAnisotropy);
+        const plaqueTex = createPlaqueTexture(
+          artwork,
+          index + 1,
+          maxAnisotropy,
+          isMobilePerf
+        );
         plaqueMesh.material = new THREE.MeshStandardMaterial({
           map: plaqueTex,
           roughness: 0.72,
@@ -867,74 +892,100 @@ export function Exhibition3D({
                 return;
               }
 
-              const img = loadedTex.image as
-                | {
-                    naturalWidth?: number;
-                    naturalHeight?: number;
-                    width?: number;
-                    height?: number;
-                  }
-                | undefined;
-              const natW = img?.naturalWidth || img?.width || 0;
-              const natH = img?.naturalHeight || img?.height || 0;
-
-              loadedTex.colorSpace = THREE.SRGBColorSpace;
-              loadedTex.anisotropy = maxAnisotropy;
-              loadedTex.generateMipmaps = true;
-              loadedTex.minFilter = THREE.LinearMipmapLinearFilter;
-              loadedTex.magFilter = THREE.LinearFilter;
-
-              const finalTex =
-                natW > 0 && natH > 0
-                  ? downscaleTextureForStage(
-                      loadedTex,
-                      natW,
-                      natH,
-                      maxStageTexDim,
-                      maxAnisotropy
-                    )
-                  : loadedTex;
-
-              photoMat.map = finalTex;
-              photoMat.needsUpdate = true;
-
-              if (natW > 0 && natH > 0) {
-                const naturalAspect = natW / natH;
-                if (Math.abs(naturalAspect - metrics.safeAspect) > 0.012) {
-                  metrics = computeFrameMetrics(naturalAspect);
-
-                  photoMesh.geometry.dispose();
-                  photoMesh.geometry = new THREE.PlaneGeometry(
-                    metrics.photoWidth,
-                    metrics.photoHeight
-                  );
-
-                  matBoard.geometry.dispose();
-                  matBoard.geometry = new THREE.BoxGeometry(
-                    metrics.matWidth,
-                    metrics.matHeight,
-                    0.024
-                  );
-
-                  outerFrame.geometry.dispose();
-                  outerFrame.geometry = new THREE.BoxGeometry(
-                    metrics.outerWidth,
-                    metrics.outerHeight,
-                    0.08
-                  );
-
-                  accentCap.position.y = metrics.outerHeight / 2 + 0.025;
-                  const nextPlaqueY = -(metrics.outerHeight / 2 + 0.17);
-                  plaqueBack.position.y = nextPlaqueY;
-                  plaqueMesh.position.y = nextPlaqueY;
-
-                  frameItem.camZAdjust = metrics.camZAdjust;
-                  frameItem.lookYAdjust = metrics.lookYAdjust;
+              const imgEl = loadedTex.image as HTMLImageElement | undefined;
+              const finalizeReadyTexture = () => {
+                if (disposed) {
+                  loadedTex.dispose();
+                  return;
                 }
-              }
 
-              requestRender();
-              scheduleNextTextureLoads();
+                const natW = imgEl?.naturalWidth || imgEl?.width || 0;
+                const natH = imgEl?.naturalHeight || imgEl?.height || 0;
+
+                loadedTex.colorSpace = THREE.SRGBColorSpace;
+                loadedTex.anisotropy = maxAnisotropy;
+                loadedTex.generateMipmaps = true;
+                loadedTex.minFilter = THREE.LinearMipmapLinearFilter;
+                loadedTex.magFilter = THREE.LinearFilter;
+
+                const finalTex =
+                  natW > 0 && natH > 0
+                    ? downscaleTextureForStage(
+                        loadedTex,
+                        natW,
+                        natH,
+                        maxStageTexDim,
+                        maxAnisotropy
+                      )
+                    : loadedTex;
+
+                const commitUpdate = () => {
+                  if (disposed) {
+                    finalTex.dispose();
+                    return;
+                  }
+                  photoMat.map = finalTex;
+                  photoMat.needsUpdate = true;
+
+                  if (natW > 0 && natH > 0) {
+                    const naturalAspect = natW / natH;
+                    if (Math.abs(naturalAspect - metrics.safeAspect) > 0.012) {
+                      metrics = computeFrameMetrics(naturalAspect);
+
+                      photoMesh.geometry.dispose();
+                      photoMesh.geometry = new THREE.PlaneGeometry(
+                        metrics.photoWidth,
+                        metrics.photoHeight
+                      );
+
+                      matBoard.geometry.dispose();
+                      matBoard.geometry = new THREE.BoxGeometry(
+                        metrics.matWidth,
+                        metrics.matHeight,
+                        0.024
+                      );
+
+                      outerFrame.geometry.dispose();
+                      outerFrame.geometry = new THREE.BoxGeometry(
+                        metrics.outerWidth,
+                        metrics.outerHeight,
+                        0.08
+                      );
+
+                      accentCap.position.y = metrics.outerHeight / 2 + 0.025;
+                      const nextPlaqueY = -(metrics.outerHeight / 2 + 0.17);
+                      plaqueBack.position.y = nextPlaqueY;
+                      plaqueMesh.position.y = nextPlaqueY;
+
+                      frameItem.camZAdjust = metrics.camZAdjust;
+                      frameItem.lookYAdjust = metrics.lookYAdjust;
+                    }
+                  }
+                };
+
+                // Queue texture/geometry swap so mobile deceleration stays hitch-free
+                if (
+                  isMobilePerf &&
+                  (isDraggingRef.current || Math.abs(scrollVelRef.current) > 0.35)
+                ) {
+                  pendingTextureCommits.push({
+                    index,
+                    texture: finalTex,
+                    commit: commitUpdate,
+                  });
+                } else {
+                  commitUpdate();
+                }
+
+                requestRender();
+                scheduleNextTextureLoads();
+              };
+
+              if (imgEl && typeof imgEl.decode === 'function') {
+                void imgEl.decode().then(finalizeReadyTexture, finalizeReadyTexture);
+              } else {
+                finalizeReadyTexture();
+              }
             },
             undefined,
             () => {
@@ -955,12 +1006,12 @@ export function Exhibition3D({
     let dofPass: SubtleDepthOfFieldPass | null = null;
     let outputPass: OutputPass | null = null;
 
-    if (!isSoftwareGl) {
+    if (!isSoftwareGl && !isMobilePerf) {
       renderer.compile(scene, camera);
 
       const pixelRatio = renderer.getPixelRatio();
       const msaaSamples = renderer.capabilities.isWebGL2
-        ? Math.min(isMobilePerf ? 2 : 4, renderer.capabilities.maxSamples)
+        ? Math.min(4, renderer.capabilities.maxSamples)
         : 0;
       const msaaTarget = new THREE.WebGLRenderTarget(
         Math.max(1, Math.floor(width * pixelRatio)),
@@ -979,24 +1030,27 @@ export function Exhibition3D({
 
       dofPass = new SubtleDepthOfFieldPass(scene, camera, {
         focus: 4.0,
-        focusDeadZone: isMobilePerf ? 0.85 : 0.65,
+        focusDeadZone: 0.65,
         blurRange: 3.0,
-        maxBlur: width < 640 ? 0.003 : 0.0044,
-        samples: isMobilePerf ? 4 : 12,
-        depthScale: isMobilePerf ? 0.25 : 0.45,
+        maxBlur: 0.0044,
+        samples: 12,
+        depthScale: 0.45,
         depthHiddenObjects,
       });
       composer.addPass(dofPass);
 
       outputPass = new OutputPass();
       composer.addPass(outputPass);
+    } else if (!isSoftwareGl) {
+      renderer.compile(scene, camera);
     }
 
-    let currentOffset = targetOffsetRef.current;
+    let currentOffset = scrollOffsetRef.current;
     let pointerParallaxX = 0;
     let pointerParallaxY = 0;
     let smoothParallaxX = 0;
     let smoothParallaxY = 0;
+    let overviewBlend = isOverviewRef.current ? 1 : 0;
 
     // Seed initial camera position (angled Atrium intro if introProgressRef === 1)
     const initCamCfg = getResponsiveCameraConfig(width, height, isOverviewRef.current);
@@ -1028,14 +1082,19 @@ export function Exhibition3D({
     function updateHelixVisibilityAndHighlights(
       offsetValue: number,
       colorAlpha: number,
-      overview: boolean
-    ): boolean {
+      overview: boolean,
+      allowNewPlaqueBuild: boolean
+    ): { colorAnimating: boolean; pendingPlaque: boolean } {
       const visibilityCutoff = overview
-        ? 14.0
-        : width < 640
-          ? 9.5
+        ? isMobilePerf
+          ? 10.5
+          : 14.0
+        : isMobilePerf
+          ? 6.5
           : 11.5;
       let colorAnimating = false;
+      let builtPlaqueThisFrame = false;
+      let pendingPlaque = false;
       const nextClickable: THREE.Object3D[] = [];
 
       for (const item of frameItems) {
@@ -1047,7 +1106,27 @@ export function Exhibition3D({
         }
 
         item.group.visible = true;
-        item.ensurePlaque();
+        if (allowNewPlaqueBuild && !builtPlaqueThisFrame) {
+          const prevMat = item.group.children[item.group.children.length - 1];
+          const wasBlank =
+            prevMat instanceof THREE.Mesh &&
+            prevMat.material === sharedPlaqueBlankMat;
+          item.ensurePlaque();
+          if (wasBlank) {
+            builtPlaqueThisFrame = true;
+          }
+        } else if (allowNewPlaqueBuild) {
+          const prevMat = item.group.children[item.group.children.length - 1];
+          if (
+            prevMat instanceof THREE.Mesh &&
+            prevMat.material === sharedPlaqueBlankMat
+          ) {
+            pendingPlaque = true;
+          }
+        } else {
+          pendingPlaque = true;
+        }
+
         nextClickable.push(item.clickTargets[0], item.clickTargets[1]);
 
         const isFocusedOrHover =
@@ -1081,7 +1160,7 @@ export function Exhibition3D({
       }
 
       visibleClickableMeshes = nextClickable;
-      return colorAnimating;
+      return { colorAnimating, pendingPlaque };
     }
 
     function getInterpolatedFraming(offsetValue: number) {
@@ -1098,7 +1177,12 @@ export function Exhibition3D({
       };
     }
 
-    updateHelixVisibilityAndHighlights(currentOffset, 1, isOverviewRef.current);
+    updateHelixVisibilityAndHighlights(
+      currentOffset,
+      1,
+      isOverviewRef.current,
+      true
+    );
 
     function afterDraw(cb: () => void) {
       if (disposed) return;
@@ -1147,49 +1231,80 @@ export function Exhibition3D({
         const count = frameItems.length;
         const maxIdx = Math.max(0, count - 1);
 
-        // Advance momentum glide after pointer/wheel release
-        if (!isDraggingRef.current && Math.abs(momentumVelRef.current) > 0.001) {
-          targetOffsetRef.current += momentumVelRef.current * delta;
-          if (targetOffsetRef.current < 0) {
-            targetOffsetRef.current = 0;
-            momentumVelRef.current = 0;
-          } else if (targetOffsetRef.current > maxIdx) {
-            targetOffsetRef.current = maxIdx;
-            momentumVelRef.current = 0;
-          } else {
-            momentumVelRef.current *= Math.exp(-3.5 * delta);
+        // Unified C1 continuous physics: exponential flick inertia -> critically damped spring settle
+        if (!isDraggingRef.current) {
+          if (goalIndexRef.current === null) {
+            if (Math.abs(scrollVelRef.current) > 0.001) {
+              const decayRate = 3.1;
+              const decay = Math.exp(-decayRate * delta);
+              scrollOffsetRef.current +=
+                scrollVelRef.current * ((1 - decay) / decayRate);
+              scrollVelRef.current *= decay;
+
+              if (scrollOffsetRef.current <= 0) {
+                scrollOffsetRef.current = 0;
+                scrollVelRef.current = 0;
+                goalIndexRef.current = 0;
+              } else if (scrollOffsetRef.current >= maxIdx) {
+                scrollOffsetRef.current = maxIdx;
+                scrollVelRef.current = 0;
+                goalIndexRef.current = maxIdx;
+              } else if (Math.abs(scrollVelRef.current) <= 1.4) {
+                // Hand off current position & velocity seamlessly into spring toward stopping frame
+                const projected =
+                  scrollOffsetRef.current + scrollVelRef.current * 0.22;
+                goalIndexRef.current = Math.max(
+                  0,
+                  Math.min(maxIdx, Math.round(projected))
+                );
+              }
+              renderDirty = true;
+            } else {
+              goalIndexRef.current = Math.max(
+                0,
+                Math.min(maxIdx, Math.round(scrollOffsetRef.current))
+              );
+            }
           }
 
-          if (Math.abs(momentumVelRef.current) < 0.28) {
-            momentumVelRef.current = 0;
-            snapTargetRef.current = Math.round(targetOffsetRef.current);
+          if (goalIndexRef.current !== null) {
+            const goal = goalIndexRef.current;
+            if (prefersReducedMotion || isSoftwareGl) {
+              scrollOffsetRef.current = goal;
+              scrollVelRef.current = 0;
+            } else {
+              const omega = 6.8;
+              const exp = Math.exp(-omega * delta);
+              const diff = scrollOffsetRef.current - goal;
+              const temp = (scrollVelRef.current + omega * diff) * delta;
+              scrollVelRef.current = (scrollVelRef.current - omega * temp) * exp;
+              scrollOffsetRef.current = goal + (diff + temp) * exp;
+
+              if (
+                Math.abs(scrollOffsetRef.current - goal) < 0.0005 &&
+                Math.abs(scrollVelRef.current) < 0.002
+              ) {
+                scrollOffsetRef.current = goal;
+                scrollVelRef.current = 0;
+                syncActiveUi(goal, true);
+              } else {
+                renderDirty = true;
+              }
+            }
           }
 
-          const nearest = Math.max(0, Math.min(maxIdx, Math.round(targetOffsetRef.current)));
-          if (nearest !== activeIndexRef.current) {
-            activeIndexRef.current = nearest;
-            setActiveIndex(nearest);
-          }
-          renderDirty = true;
-        } else if (
-          !isDraggingRef.current &&
-          snapTargetRef.current !== null &&
-          Math.abs(targetOffsetRef.current - snapTargetRef.current) > 0.001
-        ) {
-          targetOffsetRef.current = THREE.MathUtils.damp(
-            targetOffsetRef.current,
-            snapTargetRef.current,
-            8.5,
-            delta
+          const nearest = Math.max(
+            0,
+            Math.min(maxIdx, Math.round(scrollOffsetRef.current))
           );
-          if (Math.abs(targetOffsetRef.current - snapTargetRef.current) < 0.001) {
-            targetOffsetRef.current = snapTargetRef.current;
-          } else {
-            renderDirty = true;
+          if (nearest !== activeIndexRef.current) {
+            syncActiveUi(nearest);
           }
         }
 
-        // Smooth opening atrium glide
+        currentOffset = scrollOffsetRef.current;
+
+        // Smooth opening atrium glide & Overview camera blend
         if (introProgressRef.current > 0.001) {
           const introDamp = isDraggingRef.current ? 8.5 : 2.9;
           introProgressRef.current = THREE.MathUtils.damp(
@@ -1205,18 +1320,18 @@ export function Exhibition3D({
           }
         }
 
-        const goalOffset = targetOffsetRef.current;
+        const targetOverview = isOverviewRef.current ? 1 : 0;
         if (prefersReducedMotion || isSoftwareGl) {
-          currentOffset = goalOffset;
-        } else if (isDraggingRef.current) {
-          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 28, delta);
-          if (Math.abs(currentOffset - goalOffset) > 0.0008) {
-            renderDirty = true;
-          }
-        } else {
-          currentOffset = THREE.MathUtils.damp(currentOffset, goalOffset, 7.2, delta);
-          if (Math.abs(currentOffset - goalOffset) < 0.0008) {
-            currentOffset = goalOffset;
+          overviewBlend = targetOverview;
+        } else if (Math.abs(overviewBlend - targetOverview) > 0.001) {
+          overviewBlend = THREE.MathUtils.damp(
+            overviewBlend,
+            targetOverview,
+            6.2,
+            delta
+          );
+          if (Math.abs(overviewBlend - targetOverview) < 0.001) {
+            overviewBlend = targetOverview;
           } else {
             renderDirty = true;
           }
@@ -1243,71 +1358,63 @@ export function Exhibition3D({
           }
         }
 
-        const overview = isOverviewRef.current;
-        const camCfg = getResponsiveCameraConfig(width, height, overview);
+        const focusCfg = getResponsiveCameraConfig(width, height, false);
+        const overviewCfg = getResponsiveCameraConfig(width, height, true);
+        const focusDist = THREE.MathUtils.lerp(
+          focusCfg.focusDist,
+          overviewCfg.focusDist,
+          overviewBlend
+        );
+        const camOffsetY = THREE.MathUtils.lerp(
+          focusCfg.camOffsetY,
+          overviewCfg.camOffsetY,
+          overviewBlend
+        );
+        const angleLead = THREE.MathUtils.lerp(
+          focusCfg.angleLead,
+          overviewCfg.angleLead,
+          overviewBlend
+        );
+        const axisBlend = THREE.MathUtils.lerp(
+          focusCfg.axisBlend,
+          overviewCfg.axisBlend,
+          overviewBlend
+        );
+
         const framing = getInterpolatedFraming(currentOffset);
-        const aspectPullbackScale = camCfg.viewportAspect < 0.85 ? 0.82 : 0.65;
+        const aspectPullbackScale = focusCfg.viewportAspect < 0.85 ? 0.82 : 0.65;
 
         const spiralAngle = currentOffset * ANGLE_STEP;
         const spiralY = BASE_FRAME_Y + currentOffset * Y_STEP;
 
         const introT = introProgressRef.current;
-        const deltaOffset = goalOffset - currentOffset;
-        const travelIntensity = Math.min(1, Math.abs(deltaOffset) * 0.9);
-        const arcPullback = travelIntensity * 0.45;
-
+        const speedPullback = Math.min(0.45, Math.abs(scrollVelRef.current) * 0.055);
         const camAzimuth =
           spiralAngle +
-          camCfg.angleLead +
+          angleLead +
           introT * 0.42 +
           smoothParallaxX * 0.16;
 
         const desiredCamRadius =
           HELIX_RADIUS +
-          camCfg.focusDist +
+          focusDist +
           framing.camZAdjust * aspectPullbackScale +
-          arcPullback +
+          speedPullback +
           introT * 2.5;
 
-        _camTargetPos.set(
+        _camCurrentPos.set(
           desiredCamRadius * Math.sin(camAzimuth),
-          spiralY +
-            camCfg.camOffsetY +
-            introT * 1.15 +
-            smoothParallaxY * 0.18,
+          spiralY + camOffsetY + introT * 1.15 + smoothParallaxY * 0.18,
           desiredCamRadius * Math.cos(camAzimuth)
         );
 
-        const focusWeight = 1 - camCfg.axisBlend;
-        _lookTarget.set(
+        const focusWeight = 1 - axisBlend;
+        _lookCurrent.set(
           HELIX_RADIUS * focusWeight * Math.sin(spiralAngle) +
             smoothParallaxX * 0.08,
-          spiralY + framing.lookYAdjust + (overview ? 0.1 : -0.04),
+          spiralY + framing.lookYAdjust + THREE.MathUtils.lerp(-0.04, 0.1, overviewBlend),
           HELIX_RADIUS * focusWeight * Math.cos(spiralAngle)
         );
-
-        let colorAlpha = 1;
-        if (prefersReducedMotion || isSoftwareGl) {
-          _camCurrentPos.copy(_camTargetPos);
-          _lookCurrent.copy(_lookTarget);
-        } else {
-          const posAlpha = 1 - Math.exp(-5.6 * delta);
-          const lookAlpha = 1 - Math.exp(-6.8 * delta);
-          colorAlpha = 1 - Math.exp(-8.5 * delta);
-
-          _camCurrentPos.lerp(_camTargetPos, posAlpha);
-          _lookCurrent.lerp(_lookTarget, lookAlpha);
-
-          if (
-            _camCurrentPos.distanceToSquared(_camTargetPos) > 0.000004 ||
-            _lookCurrent.distanceToSquared(_lookTarget) > 0.000004
-          ) {
-            renderDirty = true;
-          } else {
-            _camCurrentPos.copy(_camTargetPos);
-            _lookCurrent.copy(_lookTarget);
-          }
-        }
 
         camera.position.copy(_camCurrentPos);
         camera.lookAt(_lookCurrent);
@@ -1329,13 +1436,37 @@ export function Exhibition3D({
           Math.cos(rimAzimuth) * 7.5
         );
 
-        const colorAnimating = updateHelixVisibilityAndHighlights(
+        const colorAlpha =
+          prefersReducedMotion || isSoftwareGl ? 1 : 1 - Math.exp(-8.5 * delta);
+        const isCalmForAssets =
+          !isDraggingRef.current && Math.abs(scrollVelRef.current) < 0.85;
+
+        const { colorAnimating, pendingPlaque } = updateHelixVisibilityAndHighlights(
           currentOffset,
           colorAlpha,
-          overview
+          isOverviewRef.current,
+          isCalmForAssets
         );
-        if (colorAnimating) {
+        if (colorAnimating || (pendingPlaque && isCalmForAssets)) {
           renderDirty = true;
+        }
+
+        // Commit at most 1 queued texture swap per calm frame on mobile
+        if (
+          pendingTextureCommits.length > 0 &&
+          !isDraggingRef.current &&
+          Math.abs(scrollVelRef.current) < 0.45
+        ) {
+          pendingTextureCommits.sort(
+            (a, b) =>
+              Math.abs(a.index - activeIndexRef.current) -
+              Math.abs(b.index - activeIndexRef.current)
+          );
+          const nextCommit = pendingTextureCommits.shift();
+          nextCommit?.commit();
+          if (pendingTextureCommits.length > 0) {
+            renderDirty = true;
+          }
         }
 
         if (composer && dofPass) {
@@ -1344,18 +1475,10 @@ export function Exhibition3D({
             spiralY,
             HELIX_RADIUS * Math.cos(spiralAngle)
           );
-          const focusDist = _camCurrentPos.distanceTo(_focusFramePos);
-          dofPass.setFocus(Math.max(1.5, focusDist - 0.05));
-          dofPass.uniforms.focusDeadZone.value = overview
-            ? 2.8
-            : isMobilePerf
-              ? 0.85
-              : 0.65;
-          dofPass.uniforms.maxBlur.value = overview
-            ? 0.0014
-            : width < 640
-              ? 0.003
-              : 0.0044;
+          const dofFocus = _camCurrentPos.distanceTo(_focusFramePos);
+          dofPass.setFocus(Math.max(1.5, dofFocus - 0.05));
+          dofPass.uniforms.focusDeadZone.value = isOverviewRef.current ? 2.8 : 0.65;
+          dofPass.uniforms.maxBlur.value = isOverviewRef.current ? 0.0014 : 0.0044;
           composer.render();
         } else {
           renderer.render(scene, camera);
@@ -1478,6 +1601,10 @@ export function Exhibition3D({
 
     return () => {
       disposed = true;
+      for (const item of pendingTextureCommits) {
+        item.texture.dispose();
+      }
+      pendingTextureCommits.length = 0;
       requestRenderRef.current = null;
       handleTapAtRef.current = null;
       handleHoverAtRef.current = null;
@@ -1654,8 +1781,8 @@ export function Exhibition3D({
 
           isDraggingRef.current = true;
           setIsDragging(true);
-          momentumVelRef.current = 0;
-          snapTargetRef.current = null;
+          scrollVelRef.current = 0;
+          goalIndexRef.current = null;
           introProgressRef.current = Math.min(introProgressRef.current, 0.2);
 
           try {
@@ -1686,22 +1813,22 @@ export function Exhibition3D({
 
             const count = artworksRef.current.length;
             const maxIdx = Math.max(0, count - 1);
-            targetOffsetRef.current = THREE.MathUtils.clamp(
-              targetOffsetRef.current + deltaOffset,
+            scrollOffsetRef.current = THREE.MathUtils.clamp(
+              scrollOffsetRef.current + deltaOffset,
               0,
               maxIdx
             );
 
             const instVel = deltaOffset / dt;
-            ps.emaVel = ps.emaVel * 0.62 + instVel * 0.38;
+            ps.emaVel = ps.emaVel * 0.55 + instVel * 0.45;
+            scrollVelRef.current = ps.emaVel;
 
             const nearest = Math.max(
               0,
-              Math.min(maxIdx, Math.round(targetOffsetRef.current))
+              Math.min(maxIdx, Math.round(scrollOffsetRef.current))
             );
             if (nearest !== activeIndexRef.current) {
-              activeIndexRef.current = nearest;
-              setActiveIndex(nearest);
+              syncActiveUi(nearest);
             }
             requestRenderRef.current?.();
             return;
@@ -1732,15 +1859,27 @@ export function Exhibition3D({
 
           const elapsed = performance.now() - ps.downTime;
           if (ps.totalMove < 10 && elapsed < 360) {
-            snapTargetRef.current = activeIndexRef.current;
+            scrollVelRef.current = 0;
+            goalIndexRef.current = activeIndexRef.current;
             handleTapAtRef.current?.(e.clientX, e.clientY);
             return;
           }
 
-          if (Math.abs(ps.emaVel) > 0.35) {
-            momentumVelRef.current = THREE.MathUtils.clamp(ps.emaVel, -14, 14);
+          // Ignore stale finger velocity if user paused thumb before lifting
+          const staleMs = performance.now() - ps.lastTime;
+          const releaseVel = staleMs > 65 ? 0 : ps.emaVel;
+          if (Math.abs(releaseVel) > 0.45) {
+            scrollVelRef.current = THREE.MathUtils.clamp(releaseVel, -14, 14);
+            goalIndexRef.current = null;
           } else {
-            snapTargetRef.current = Math.round(targetOffsetRef.current);
+            scrollVelRef.current = releaseVel;
+            goalIndexRef.current = Math.max(
+              0,
+              Math.min(
+                Math.max(0, artworksRef.current.length - 1),
+                Math.round(scrollOffsetRef.current)
+              )
+            );
           }
           requestRenderRef.current?.();
         }}
@@ -1750,7 +1889,14 @@ export function Exhibition3D({
           ps.activeId = null;
           isDraggingRef.current = false;
           setIsDragging(false);
-          snapTargetRef.current = Math.round(targetOffsetRef.current);
+          scrollVelRef.current = 0;
+          goalIndexRef.current = Math.max(
+            0,
+            Math.min(
+              Math.max(0, artworksRef.current.length - 1),
+              Math.round(scrollOffsetRef.current)
+            )
+          );
           requestRenderRef.current?.();
         }}
         onPointerLeave={() => {
